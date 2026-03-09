@@ -11,6 +11,7 @@ A collection of informational documents, guides, and scripts to accompany the **
 | File | Description |
 |------|-------------|
 | [Claude Code + LM Studio.md](Claude%20Code%20+%20LM%20Studio.md) | Guide for using Claude Code with LM Studio |
+| [Claude Code + Ollama.md](Claude%20Code%20+%20Ollama.md) | Guide for using Claude Code with Ollama |
 
 ---
 
