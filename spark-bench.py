@@ -566,12 +566,11 @@ def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1):
 
     llama_cli = "/home/tyrel/llama.cpp/build/bin/llama-cli"
     if not Path(llama_cli).exists():
-        # search PATH
         import shutil
         llama_cli = shutil.which("llama-cli") or llama_cli
 
-    print(f"\n  Backend : llama.cpp")
-    print(f"  Model   : {model_path}")
+    print(f"\n  Backend : llama.cpp  ({Path(llama_cli).parent})")
+    print(f"  Model   : {Path(model_path).name}")
     print(f"  Tokens  : {max_tokens}  |  Runs: {runs}\n")
 
     prefill_tps_list, decode_tps_list = [], []
@@ -579,12 +578,14 @@ def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1):
     for run in range(runs):
         cmd = [
             llama_cli,
-            "-m", model_path,
-            "-p", prompt,
-            "-n", str(max_tokens),
+            "-m",  model_path,
+            "-p",  prompt,
+            "-n",  str(max_tokens),
             "--n-gpu-layers", str(n_gpu_layers),
             "--no-display-prompt",
-            "-s", "42",
+            "--single-turn",
+            "--simple-io",
+            "-s",  "42",
         ]
         t0 = time.perf_counter()
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
@@ -592,27 +593,34 @@ def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1):
 
         output = result.stdout + result.stderr
 
-        # llama.cpp: "prompt eval time = 1234.56 ms / 42 tokens (  29.39 ms per token,  34.02 tokens per second)"
+        # New llama.cpp format: [ Prompt: 485.2 t/s | Generation: 44.7 t/s ]
+        new_m = re.search(
+            r"\[\s*Prompt:\s*([\d.]+)\s*t/s\s*\|\s*Generation:\s*([\d.]+)\s*t/s\s*\]",
+            output)
+        # Legacy format: "X tokens per second"
         prefill_m = re.search(
-            r"prompt eval time\s*=\s*[\d.]+ ms\s*/\s*\d+ tokens.*?([\d.]+)\s+tokens per second",
-            output)
+            r"prompt eval time.*?([\d.]+)\s+tokens per second", output)
         decode_m  = re.search(
-            r"(?<!prompt )eval time\s*=\s*[\d.]+ ms\s*/\s*\d+ runs.*?([\d.]+)\s+tokens per second",
-            output)
-        n_gen_m   = re.search(r"eval time\s*=.*?/\s*(\d+)\s+runs", output)
+            r"(?<!prompt )eval time.*?([\d.]+)\s+tokens per second", output)
 
-        prefill_tps = float(prefill_m.group(1)) if prefill_m else None
-        decode_tps  = float(decode_m.group(1))  if decode_m  else None
-        n_gen       = int(n_gen_m.group(1))      if n_gen_m   else "?"
+        if new_m:
+            prefill_tps = float(new_m.group(1))
+            decode_tps  = float(new_m.group(2))
+        elif prefill_m and decode_m:
+            prefill_tps = float(prefill_m.group(1))
+            decode_tps  = float(decode_m.group(1))
+        else:
+            prefill_tps = decode_tps = None
 
-        parts = [f"Run {run+1}/{runs}  ({elapsed:.1f}s)"]
+        parts = [f"Run {run+1}/{runs}  ({elapsed:.1f}s total)"]
         if prefill_tps:
-            parts.append(f"prefill {prefill_tps:.0f} tok/s")
+            parts.append(f"prefill {prefill_tps:6.0f} tok/s")
             prefill_tps_list.append(prefill_tps)
         if decode_tps:
-            parts.append(f"decode {decode_tps:.1f} tok/s")
+            parts.append(f"decode {decode_tps:6.1f} tok/s")
             decode_tps_list.append(decode_tps)
-        parts.append(f"({n_gen} tokens)")
+        if not prefill_tps and not decode_tps:
+            parts.append(warn("no stats parsed"))
         print("  " + "  |  ".join(parts))
 
     print()
@@ -620,6 +628,7 @@ def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1):
         print(f"  {'Median prefill':<28} {ok(f'{float(np.median(prefill_tps_list)):.0f} tok/s')}")
     if decode_tps_list:
         print(f"  {'Median decode':<28} {ok(f'{float(np.median(decode_tps_list)):.1f} tok/s')}")
+    print()
 
 
 def cmd_llm(args):
