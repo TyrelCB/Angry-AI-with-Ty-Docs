@@ -569,6 +569,16 @@ def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1):
         import shutil
         llama_cli = shutil.which("llama-cli") or llama_cli
 
+    # Validate: llama.cpp needs a GGUF file path, not an ollama model tag
+    if not Path(model_path).exists():
+        looks_like_tag = "/" not in model_path and not model_path.endswith(".gguf")
+        hint = "  Hint: llama.cpp requires a GGUF file path.\n"
+        if looks_like_tag:
+            hint += f"  '{model_path}' looks like an Ollama tag — try: --backend ollama"
+        else:
+            hint += f"  File not found: {model_path}"
+        sys.exit(f"\n  ERROR: model not found.\n{hint}\n")
+
     print(f"\n  Backend : llama.cpp  ({Path(llama_cli).parent})")
     print(f"  Model   : {Path(model_path).name}")
     print(f"  Tokens  : {max_tokens}  |  Runs: {runs}\n")
@@ -621,6 +631,12 @@ def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1):
             decode_tps_list.append(decode_tps)
         if not prefill_tps and not decode_tps:
             parts.append(warn("no stats parsed"))
+            # Show last line of stderr to hint at what went wrong
+            err_hint = (result.stderr or result.stdout or "").strip().splitlines()
+            if err_hint:
+                print("  " + "  |  ".join(parts))
+                print(f"    stderr: {err_hint[-1][:120]}")
+                continue
         print("  " + "  |  ".join(parts))
 
     print()
