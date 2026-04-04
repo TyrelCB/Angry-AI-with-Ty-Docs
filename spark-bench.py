@@ -572,12 +572,33 @@ def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1):
     # Validate: llama.cpp needs a GGUF file path, not an ollama model tag
     if not Path(model_path).exists():
         looks_like_tag = "/" not in model_path and not model_path.endswith(".gguf")
-        hint = "  Hint: llama.cpp requires a GGUF file path.\n"
+        lines = ["\n  ERROR: model not found.",
+                 "  Hint: llama.cpp requires a local GGUF file path."]
         if looks_like_tag:
-            hint += f"  '{model_path}' looks like an Ollama tag — try: --backend ollama"
+            lines.append(f"  '{model_path}' looks like an Ollama tag — try: --backend ollama")
         else:
-            hint += f"  File not found: {model_path}"
-        sys.exit(f"\n  ERROR: model not found.\n{hint}\n")
+            lines.append(f"  File not found: {model_path}")
+
+        # Search common GGUF locations
+        search_roots = [
+            Path.home() / ".cache" / "huggingface" / "hub",
+            Path.home() / "Downloads",
+            Path.home() / "models",
+            Path("/models"),
+        ]
+        found_ggufs = []
+        for root in search_roots:
+            if root.exists():
+                found_ggufs.extend(sorted(root.rglob("*.gguf")))
+
+        if found_ggufs:
+            lines.append("\n  Available GGUFs on this system:")
+            for g in found_ggufs:
+                lines.append(f"    {g}")
+        else:
+            lines.append("  No .gguf files found in ~/Downloads, ~/.cache/huggingface, or /models")
+
+        sys.exit("\n".join(lines) + "\n")
 
     print(f"\n  Backend : llama.cpp  ({Path(llama_cli).parent})")
     print(f"  Model   : {Path(model_path).name}")
