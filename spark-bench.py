@@ -673,13 +673,16 @@ def _run_ollama(model, prompt, max_tokens, runs):
     print(f"  Context : {ctx_str} tokens  |  Generate: {max_tokens}  |  Runs: {runs}\n")
 
     # warm-up: ensure model is loaded before timing
+    mem_before = GpuMonitor._gpu_mem_mib() or 0.0
     print("  Warming up (loading model) …", end="", flush=True)
     try:
         req = urllib.request.Request(api, data=payload,
                                      headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=300) as resp:
             _ = json.loads(resp.read())
-        print(ok("  ready"))
+        mem_after = GpuMonitor._gpu_mem_mib() or 0.0
+        mem_delta = (mem_after - mem_before) / 1024
+        print(ok(f"  ready") + f"  (loaded {mem_after/1024:.1f} GB,  +{mem_delta:.1f} GB for KV cache @ {ctx_str} ctx)")
     except urllib.error.URLError as e:
         sys.exit(fail(f"\n  Cannot reach ollama at {api}: {e}\n  Is ollama running? (ollama serve)"))
 
@@ -772,6 +775,7 @@ def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1):
     print(f"  Context : model max (--ctx-size 0)  |  Generate: {max_tokens}  |  Runs: {runs}\n")
 
     prefill_tps_list, decode_tps_list, gpu_stats_list = [], [], []
+    mem_before_load = GpuMonitor._gpu_mem_mib() or 0.0
 
     for run in range(runs):
         cmd = [
@@ -833,6 +837,11 @@ def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1):
             parts.append(GpuMonitor.fmt_inline(gpu))
             gpu_stats_list.append(gpu)
         print("  " + "  |  ".join(parts))
+        # After run 1, report model+KV cache memory allocation
+        if run == 0:
+            mem_after_load = GpuMonitor._gpu_mem_mib() or 0.0
+            delta = (mem_after_load - mem_before_load) / 1024
+            print(f"    → loaded {mem_after_load/1024:.1f} GB  (+{delta:.1f} GB model + KV cache)")
 
     print()
     if prefill_tps_list:
