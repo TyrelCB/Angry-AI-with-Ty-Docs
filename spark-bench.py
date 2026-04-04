@@ -120,16 +120,23 @@ class GpuMonitor:
             return None
 
     @staticmethod
-    def _unified_mem_pct() -> float | None:
-        """Read unified memory usage % from /proc/meminfo (matches nvtop on GB10)."""
+    def _gpu_mem_mib() -> float | None:
+        """Sum compute-app GPU memory via nvidia-smi (matches nvtop per-process reading)."""
         try:
-            with open("/proc/meminfo") as f:
-                info = {k.strip(): int(v.split()[0])
-                        for k, v in (line.split(":", 1) for line in f if ":" in line)}
-            total = info.get("MemTotal", 0)
-            avail = info.get("MemAvailable", 0)
-            if total:
-                return (total - avail) / total * 100.0
+            r = subprocess.run(
+                ["nvidia-smi", "--query-compute-apps=used_gpu_memory",
+                 "--format=csv,noheader,nounits"],
+                capture_output=True, text=True, timeout=2,
+            )
+            vals = []
+            for line in r.stdout.strip().splitlines():
+                line = line.strip()
+                if line and not line.startswith("["):
+                    try:
+                        vals.append(float(line))
+                    except ValueError:
+                        pass
+            return sum(vals) if vals else 0.0
         except Exception:
             pass
         return None
@@ -142,11 +149,11 @@ class GpuMonitor:
                      f"--format={self._FMT}"],
                     capture_output=True, text=True, timeout=2,
                 )
-                mem_pct = self._unified_mem_pct()
+                mem_mib = self._gpu_mem_mib()
                 for line in r.stdout.strip().splitlines():
                     parts = [self._parse(p) for p in line.split(",")]
                     if len(parts) == 4 and all(p is not None for p in parts):
-                        self._samples.append(tuple(parts) + (mem_pct,))
+                        self._samples.append(tuple(parts) + (mem_mib,))
             except Exception:
                 pass
             self._stop_evt.wait(self.interval_s)
@@ -154,25 +161,24 @@ class GpuMonitor:
     def stats(self) -> dict | None:
         if not self._samples:
             return None
-        util, clk, pwr, membw, mem_pct = zip(*self._samples)
+        util, clk, pwr, membw, mem_mib = zip(*self._samples)
         s = {
             "util_pct":  {"avg": float(np.mean(util)),  "peak": float(np.max(util))},
             "clk_mhz":   {"avg": float(np.mean(clk)),   "peak": float(np.max(clk))},
             "power_w":   {"avg": float(np.mean(pwr)),   "peak": float(np.max(pwr))},
-            "membw_pct": {"avg": float(np.mean(membw)), "peak": float(np.max(membw))},
         }
-        valid_mem = [m for m in mem_pct if m is not None]
+        valid_mem = [m for m in mem_mib if m is not None]
         if valid_mem:
-            s["unified_mem_pct"] = {"avg": float(np.mean(valid_mem)),
-                                    "peak": float(np.max(valid_mem))}
+            s["mem_mib"] = {"avg": float(np.mean(valid_mem)),
+                            "peak": float(np.max(valid_mem))}
         return s
 
     @staticmethod
     def fmt_inline(s: dict) -> str:
         """One-line summary for appending to a run row."""
         mem_str = ""
-        if "unified_mem_pct" in s:
-            mem_str = f"  mem {s['unified_mem_pct']['peak']:.0f}%"
+        if "mem_mib" in s:
+            mem_str = f"  mem {s['mem_mib']['peak']/1024:.1f} GB"
         return (f"GPU {s['util_pct']['avg']:.0f}%  "
                 f"{s['clk_mhz']['avg']:.0f} MHz  "
                 f"{s['power_w']['avg']:.0f} W"
@@ -192,11 +198,11 @@ class GpuMonitor:
             f"  {'GPU SM clock (avg)':<28} {np.mean(clk):.0f} MHz",
             f"  {'GPU power (avg / peak)':<28} {np.mean(pwr):.0f} W  /  {max(ppeak):.0f} W",
         ]
-        mem_vals = [s["unified_mem_pct"]["peak"] for s in all_stats if "unified_mem_pct" in s]
-        if mem_vals:
+        mem_peaks = [s["mem_mib"]["peak"] for s in all_stats if "mem_mib" in s]
+        if mem_peaks:
+            peak_gb = max(mem_peaks) / 1024
             lines.append(
-                f"  {'Unified mem used (peak)':<28} {max(mem_vals):.0f} %"
-                f"  ({max(mem_vals)/100 * 128:.0f} / 128 GB)"
+                f"  {'GPU memory used (peak)':<28} {peak_gb:.1f} GB"
             )
         return lines
 
