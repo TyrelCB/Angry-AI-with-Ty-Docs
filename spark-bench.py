@@ -14,7 +14,9 @@ import argparse
 import json
 import math
 import os
+import subprocess
 import sys
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -76,6 +78,98 @@ def cpu_time(fn, warmup=2, runs=5):
         fn()
         times.append(time.perf_counter() - t0)
     return float(np.median(times))
+
+
+# ── GPU monitor ───────────────────────────────────────────────────────────────
+
+class GpuMonitor:
+    """Polls nvidia-smi in a background thread during LLM inference runs.
+
+    Captures per-sample: utilization %, SM clock MHz, power W, memory BW %.
+    Call start() before a run, stop() after — returns a stats dict with avg/peak.
+    """
+    _QUERY = "utilization.gpu,clocks.sm,power.draw,utilization.memory"
+    _FMT   = "csv,noheader,nounits"
+
+    def __init__(self, interval_s=0.25):
+        self.interval_s = interval_s
+        self._samples: list[tuple] = []
+        self._stop_evt = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self):
+        self._samples.clear()
+        self._stop_evt.clear()
+        self._thread = threading.Thread(target=self._poll, daemon=True)
+        self._thread.start()
+
+    def stop(self) -> dict | None:
+        self._stop_evt.set()
+        if self._thread:
+            self._thread.join(timeout=3)
+        return self.stats()
+
+    @staticmethod
+    def _parse(val: str) -> float | None:
+        v = val.strip()
+        if v.startswith("[") or v == "N/A":
+            return None
+        try:
+            return float(v)
+        except ValueError:
+            return None
+
+    def _poll(self):
+        while not self._stop_evt.is_set():
+            try:
+                r = subprocess.run(
+                    ["nvidia-smi", f"--query-gpu={self._QUERY}",
+                     f"--format={self._FMT}"],
+                    capture_output=True, text=True, timeout=2,
+                )
+                for line in r.stdout.strip().splitlines():
+                    parts = [self._parse(p) for p in line.split(",")]
+                    if len(parts) == 4 and all(p is not None for p in parts):
+                        self._samples.append(tuple(parts))
+            except Exception:
+                pass
+            self._stop_evt.wait(self.interval_s)
+
+    def stats(self) -> dict | None:
+        if not self._samples:
+            return None
+        util, clk, pwr, membw = zip(*self._samples)
+        return {
+            "util_pct":  {"avg": float(np.mean(util)),  "peak": float(np.max(util))},
+            "clk_mhz":   {"avg": float(np.mean(clk)),   "peak": float(np.max(clk))},
+            "power_w":   {"avg": float(np.mean(pwr)),   "peak": float(np.max(pwr))},
+            "membw_pct": {"avg": float(np.mean(membw)), "peak": float(np.max(membw))},
+        }
+
+    @staticmethod
+    def fmt_inline(s: dict) -> str:
+        """One-line summary for appending to a run row."""
+        return (f"GPU {s['util_pct']['avg']:.0f}%  "
+                f"{s['clk_mhz']['avg']:.0f} MHz  "
+                f"{s['power_w']['avg']:.0f} W  "
+                f"mem BW {s['membw_pct']['avg']:.0f}%")
+
+    @staticmethod
+    def fmt_summary(all_stats: list) -> list[str]:
+        """Multi-line summary across all runs for printing at the end."""
+        if not all_stats:
+            return []
+        util  = [s["util_pct"]["avg"]  for s in all_stats]
+        clk   = [s["clk_mhz"]["avg"]   for s in all_stats]
+        pwr   = [s["power_w"]["avg"]   for s in all_stats]
+        ppeak = [s["power_w"]["peak"]  for s in all_stats]
+        membw = [s["membw_pct"]["avg"] for s in all_stats]
+        return [
+            f"  {'GPU utilization (avg)':<28} {np.mean(util):.0f} %",
+            f"  {'GPU SM clock (avg)':<28} {np.mean(clk):.0f} MHz",
+            f"  {'GPU power (avg / peak)':<28} {np.mean(pwr):.0f} W  /  {max(ppeak):.0f} W",
+            f"  {'GPU mem BW util (avg)':<28} {np.mean(membw):.0f} %",
+        ]
 
 
 # ── individual benchmarks ─────────────────────────────────────────────────────
@@ -524,15 +618,18 @@ def _run_ollama(model, prompt, max_tokens, runs):
     except urllib.error.URLError as e:
         sys.exit(fail(f"\n  Cannot reach ollama at {api}: {e}\n  Is ollama running? (ollama serve)"))
 
-    prefill_tps_list, decode_tps_list = [], []
+    prefill_tps_list, decode_tps_list, gpu_stats_list = [], [], []
 
     for run in range(runs):
         req = urllib.request.Request(api, data=payload,
                                      headers={"Content-Type": "application/json"})
+        monitor = GpuMonitor()
+        monitor.start()
         t0 = time.perf_counter()
         with urllib.request.urlopen(req, timeout=300) as resp:
             r = json.loads(resp.read())
         elapsed = time.perf_counter() - t0
+        gpu = monitor.stop()
 
         n_prompt = r.get("prompt_eval_count", 0)
         n_gen    = r.get("eval_count", 0)
@@ -550,6 +647,9 @@ def _run_ollama(model, prompt, max_tokens, runs):
         if decode_tps:
             parts.append(f"decode {decode_tps:6.1f} tok/s  ({n_gen} tok)")
             decode_tps_list.append(decode_tps)
+        if gpu:
+            parts.append(GpuMonitor.fmt_inline(gpu))
+            gpu_stats_list.append(gpu)
         print("  " + "  |  ".join(parts))
 
     print()
@@ -557,12 +657,14 @@ def _run_ollama(model, prompt, max_tokens, runs):
         print(f"  {'Median prefill':<28} {ok(f'{float(np.median(prefill_tps_list)):.0f} tok/s')}")
     if decode_tps_list:
         print(f"  {'Median decode':<28} {ok(f'{float(np.median(decode_tps_list)):.1f} tok/s')}")
+    for line in GpuMonitor.fmt_summary(gpu_stats_list):
+        print(line)
     print()
 
 
 def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1):
     """Benchmark token generation via llama-cli."""
-    import subprocess, re
+    import re
 
     llama_cli = "/home/tyrel/llama.cpp/build/bin/llama-cli"
     if not Path(llama_cli).exists():
@@ -604,7 +706,7 @@ def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1):
     print(f"  Model   : {Path(model_path).name}")
     print(f"  Tokens  : {max_tokens}  |  Runs: {runs}\n")
 
-    prefill_tps_list, decode_tps_list = [], []
+    prefill_tps_list, decode_tps_list, gpu_stats_list = [], [], []
 
     for run in range(runs):
         cmd = [
@@ -618,9 +720,12 @@ def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1):
             "--simple-io",
             "-s",  "42",
         ]
+        monitor = GpuMonitor()
+        monitor.start()
         t0 = time.perf_counter()
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
         elapsed = time.perf_counter() - t0
+        gpu = monitor.stop()
 
         output = result.stdout + result.stderr
 
@@ -658,6 +763,9 @@ def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1):
                 print("  " + "  |  ".join(parts))
                 print(f"    stderr: {err_hint[-1][:120]}")
                 continue
+        if gpu:
+            parts.append(GpuMonitor.fmt_inline(gpu))
+            gpu_stats_list.append(gpu)
         print("  " + "  |  ".join(parts))
 
     print()
@@ -665,6 +773,8 @@ def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1):
         print(f"  {'Median prefill':<28} {ok(f'{float(np.median(prefill_tps_list)):.0f} tok/s')}")
     if decode_tps_list:
         print(f"  {'Median decode':<28} {ok(f'{float(np.median(decode_tps_list)):.1f} tok/s')}")
+    for line in GpuMonitor.fmt_summary(gpu_stats_list):
+        print(line)
     print()
 
 
