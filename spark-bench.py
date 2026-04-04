@@ -630,21 +630,47 @@ def print_sysinfo(versions=None):
 # ── LLM token generation benchmark ───────────────────────────────────────────
 
 
+def _ollama_ctx_len(model: str) -> int | None:
+    """Query ollama /api/show for model's maximum context length."""
+    import urllib.request, urllib.error
+    try:
+        payload = json.dumps({"name": model}).encode()
+        req = urllib.request.Request(
+            "http://localhost:11434/api/show", data=payload,
+            headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            d = json.loads(resp.read())
+        for k, v in d.get("model_info", {}).items():
+            if k.endswith(".context_length"):
+                return int(v)
+    except Exception:
+        pass
+    return None
+
+
 def _run_ollama(model, prompt, max_tokens, runs):
     """Benchmark token generation via ollama REST API (localhost:11434)."""
     import urllib.request, urllib.error
 
     api = "http://localhost:11434/api/generate"
+
+    # Resolve model max context before first request
+    ctx_len = _ollama_ctx_len(model)
+    options: dict = {"num_predict": max_tokens}
+    if ctx_len:
+        options["num_ctx"] = ctx_len
+
     payload = json.dumps({
         "model":   model,
         "prompt":  prompt,
         "stream":  False,
-        "options": {"num_predict": max_tokens},
+        "options": options,
     }).encode()
 
+    ctx_str = f"{ctx_len:,}" if ctx_len else "default"
     print(f"\n  Backend : ollama  ({api})")
     print(f"  Model   : {model}")
-    print(f"  Tokens  : {max_tokens}  |  Runs: {runs}\n")
+    print(f"  Context : {ctx_str} tokens  |  Generate: {max_tokens}  |  Runs: {runs}\n")
 
     # warm-up: ensure model is loaded before timing
     print("  Warming up (loading model) …", end="", flush=True)
@@ -743,7 +769,7 @@ def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1):
 
     print(f"\n  Backend : llama.cpp  ({Path(llama_cli).parent})")
     print(f"  Model   : {Path(model_path).name}")
-    print(f"  Tokens  : {max_tokens}  |  Runs: {runs}\n")
+    print(f"  Context : model max (--ctx-size 0)  |  Generate: {max_tokens}  |  Runs: {runs}\n")
 
     prefill_tps_list, decode_tps_list, gpu_stats_list = [], [], []
 
@@ -753,6 +779,7 @@ def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1):
             "-m",  model_path,
             "-p",  prompt,
             "-n",  str(max_tokens),
+            "-c",  "0",
             "--n-gpu-layers", str(n_gpu_layers),
             "--no-display-prompt",
             "--single-turn",
