@@ -730,7 +730,8 @@ def _run_ollama(model, prompt, max_tokens, runs):
     print()
 
 
-def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1):
+def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1,
+                   kv_type_k="f16", kv_type_v="f16"):
     """Benchmark token generation via llama-cli."""
     import re
 
@@ -770,9 +771,10 @@ def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1):
 
         sys.exit("\n".join(lines) + "\n")
 
+    kv_str = f"K={kv_type_k} / V={kv_type_v}"
     print(f"\n  Backend : llama.cpp  ({Path(llama_cli).parent})")
     print(f"  Model   : {Path(model_path).name}")
-    print(f"  Context : model max (--ctx-size 0)  |  Generate: {max_tokens}  |  Runs: {runs}\n")
+    print(f"  Context : model max (--ctx-size 0)  |  KV cache: {kv_str}  |  Generate: {max_tokens}  |  Runs: {runs}\n")
 
     prefill_tps_list, decode_tps_list, gpu_stats_list = [], [], []
     mem_before_load = GpuMonitor._gpu_mem_mib() or 0.0
@@ -784,6 +786,8 @@ def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1):
             "-p",  prompt,
             "-n",  str(max_tokens),
             "-c",  "0",
+            "-ctk", kv_type_k,
+            "-ctv", kv_type_v,
             "--n-gpu-layers", str(n_gpu_layers),
             "--no-display-prompt",
             "--single-turn",
@@ -859,11 +863,14 @@ def cmd_llm(args):
     print(head(f"╚════════════════════════════════════════════════════════════════╝"))
 
     if args.backend == "ollama":
+        if args.kv_type_k != "f16" or args.kv_type_v != "f16":
+            print(warn("  Note: --kv-type-k/v are ignored for the ollama backend"))
         _run_ollama(args.model or DEFAULT_MODEL_OLLAMA, args.prompt, args.max_tokens, args.runs)
     else:
         if not args.model:
             sys.exit(fail("  --model <path-to-gguf> is required for llama.cpp backend"))
-        _run_llama_cpp(args.model, args.prompt, args.max_tokens, args.runs)
+        _run_llama_cpp(args.model, args.prompt, args.max_tokens, args.runs,
+                       kv_type_k=args.kv_type_k, kv_type_v=args.kv_type_v)
 
 
 # ── entry points ──────────────────────────────────────────────────────────────
@@ -958,6 +965,7 @@ def main():
 
     sub.add_parser("show", help="Print saved baseline")
 
+    KV_TYPES = ["f16", "f32", "bf16", "q8_0", "q4_0", "q4_1", "iq4_nl", "q5_0", "q5_1"]
     lm = sub.add_parser("llm", help="LLM token generation benchmark (ollama or llama.cpp)")
     lm.add_argument("--backend", choices=["ollama", "llama.cpp"], default="ollama",
                     help="Inference backend (default: ollama)")
@@ -969,6 +977,10 @@ def main():
                     help="Max new tokens to generate per run (default: 200)")
     lm.add_argument("--runs", type=int, default=3, metavar="N",
                     help="Number of generation runs for median (default: 3)")
+    lm.add_argument("--kv-type-k", default="f16", choices=KV_TYPES, metavar="TYPE",
+                    help=f"KV cache type for K (llama.cpp only, default: f16). Options: {', '.join(KV_TYPES)}")
+    lm.add_argument("--kv-type-v", default="f16", choices=KV_TYPES, metavar="TYPE",
+                    help=f"KV cache type for V (llama.cpp only, default: f16). Options: {', '.join(KV_TYPES)}")
 
     args = p.parse_args()
     {"baseline": cmd_baseline, "measure": cmd_measure, "show": cmd_show,
