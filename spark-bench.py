@@ -169,7 +169,7 @@ class GpuMonitor:
             "clk_mhz":   {"avg": float(np.mean(clk)),
                           "p95": float(np.percentile(clk, 95)),
                           "peak": float(np.max(clk))},
-            "power_w":   {"avg": float(np.mean(pwr)),   "peak": float(np.max(pwr))},
+            "power_w":   {"p95": float(np.percentile(pwr, 95)), "peak": float(np.max(pwr))},
         }
         valid_mem = [m for m in mem_mib if m is not None]
         if valid_mem:
@@ -185,7 +185,7 @@ class GpuMonitor:
             mem_str = f"  mem {s['mem_mib']['peak']/1024:.1f} GB"
         return (f"GPU {s['util_pct']['p95']:.0f}% p95  "
                 f"{s['clk_mhz']['p95']:.0f} MHz  "
-                f"{s['power_w']['avg']:.0f} W"
+                f"{s['power_w']['p95']:.0f} W p95"
                 f"{mem_str}")
 
     @staticmethod
@@ -195,12 +195,12 @@ class GpuMonitor:
             return []
         util_p95 = [s["util_pct"]["p95"] for s in all_stats]
         clk_p95  = [s["clk_mhz"]["p95"]  for s in all_stats]
-        pwr      = [s["power_w"]["avg"]   for s in all_stats]
-        ppeak    = [s["power_w"]["peak"]  for s in all_stats]
+        pwr_p95  = [s["power_w"]["p95"]  for s in all_stats]
+        ppeak    = [s["power_w"]["peak"] for s in all_stats]
         lines = [
             f"  {'GPU utilization (p95)':<28} {np.mean(util_p95):.0f} %",
             f"  {'GPU SM clock (p95)':<28} {np.mean(clk_p95):.0f} MHz",
-            f"  {'GPU power (avg / peak)':<28} {np.mean(pwr):.0f} W  /  {max(ppeak):.0f} W",
+            f"  {'GPU power (p95 / peak)':<28} {np.mean(pwr_p95):.0f} W  /  {max(ppeak):.0f} W",
         ]
         mem_peaks = [s["mem_mib"]["peak"] for s in all_stats if "mem_mib" in s]
         if mem_peaks:
