@@ -648,14 +648,18 @@ def _ollama_ctx_len(model: str) -> int | None:
     return None
 
 
-def _run_ollama(model, prompt, max_tokens, runs):
+def _run_ollama(model, prompt, max_tokens, runs, ctx_size=None, silent=False):
     """Benchmark token generation via ollama REST API (localhost:11434)."""
     import urllib.request, urllib.error
 
+    def _p(*a, **k):
+        if not silent:
+            print(*a, **k)
+
     api = "http://localhost:11434/api/generate"
 
-    # Resolve model max context before first request
-    ctx_len = _ollama_ctx_len(model)
+    # Resolve context: explicit override > model max > default
+    ctx_len = ctx_size if ctx_size else _ollama_ctx_len(model)
     options: dict = {"num_predict": max_tokens}
     if ctx_len:
         options["num_ctx"] = ctx_len
@@ -668,23 +672,24 @@ def _run_ollama(model, prompt, max_tokens, runs):
     }).encode()
 
     ctx_str = f"{ctx_len:,}" if ctx_len else "default"
-    print(f"\n  Backend : ollama  ({api})")
-    print(f"  Model   : {model}")
-    print(f"  Context : {ctx_str} tokens  |  Generate: {max_tokens}  |  Runs: {runs}\n")
+    _p(f"\n  Backend : ollama  ({api})")
+    _p(f"  Model   : {model}")
+    _p(f"  Context : {ctx_str} tokens  |  Generate: {max_tokens}  |  Runs: {runs}\n")
 
-    # warm-up: ensure model is loaded before timing
-    mem_before = GpuMonitor._gpu_mem_mib() or 0.0
-    print("  Warming up (loading model) …", end="", flush=True)
-    try:
-        req = urllib.request.Request(api, data=payload,
-                                     headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=300) as resp:
-            _ = json.loads(resp.read())
-        mem_after = GpuMonitor._gpu_mem_mib() or 0.0
-        mem_delta = (mem_after - mem_before) / 1024
-        print(ok(f"  ready") + f"  (loaded {mem_after/1024:.1f} GB,  +{mem_delta:.1f} GB for KV cache @ {ctx_str} ctx)")
-    except urllib.error.URLError as e:
-        sys.exit(fail(f"\n  Cannot reach ollama at {api}: {e}\n  Is ollama running? (ollama serve)"))
+    # warm-up: ensure model is loaded before timing (skip in silent/sweep mode)
+    if not silent:
+        mem_before = GpuMonitor._gpu_mem_mib() or 0.0
+        _p("  Warming up (loading model) …", end="", flush=True)
+        try:
+            req = urllib.request.Request(api, data=payload,
+                                         headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=300) as resp:
+                _ = json.loads(resp.read())
+            mem_after = GpuMonitor._gpu_mem_mib() or 0.0
+            mem_delta = (mem_after - mem_before) / 1024
+            _p(ok(f"  ready") + f"  (loaded {mem_after/1024:.1f} GB,  +{mem_delta:.1f} GB for KV cache @ {ctx_str} ctx)")
+        except urllib.error.URLError as e:
+            sys.exit(fail(f"\n  Cannot reach ollama at {api}: {e}\n  Is ollama running? (ollama serve)"))
 
     prefill_tps_list, decode_tps_list, gpu_stats_list = [], [], []
 
@@ -694,8 +699,14 @@ def _run_ollama(model, prompt, max_tokens, runs):
         monitor = GpuMonitor()
         monitor.start()
         t0 = time.perf_counter()
-        with urllib.request.urlopen(req, timeout=300) as resp:
-            r = json.loads(resp.read())
+        try:
+            with urllib.request.urlopen(req, timeout=600) as resp:
+                r = json.loads(resp.read())
+        except urllib.error.URLError as e:
+            if not silent:
+                sys.exit(fail(f"\n  Cannot reach ollama at {api}: {e}\n  Is ollama running? (ollama serve)"))
+            monitor.stop()
+            return {"status": "error", "error": str(e)}
         elapsed = time.perf_counter() - t0
         gpu = monitor.stop()
 
@@ -718,16 +729,17 @@ def _run_ollama(model, prompt, max_tokens, runs):
         if gpu:
             parts.append(GpuMonitor.fmt_inline(gpu))
             gpu_stats_list.append(gpu)
-        print("  " + "  |  ".join(parts))
+        _p("  " + "  |  ".join(parts))
 
-    print()
+    _p()
     if prefill_tps_list:
-        print(f"  {'Median prefill':<28} {ok(f'{float(np.median(prefill_tps_list)):.0f} tok/s')}")
+        _p(f"  {'Median prefill':<28} {ok(f'{float(np.median(prefill_tps_list)):.0f} tok/s')}")
     if decode_tps_list:
-        print(f"  {'Median decode':<28} {ok(f'{float(np.median(decode_tps_list)):.1f} tok/s')}")
-    for line in GpuMonitor.fmt_summary(gpu_stats_list):
-        print(line)
-    print()
+        _p(f"  {'Median decode':<28} {ok(f'{float(np.median(decode_tps_list)):.1f} tok/s')}")
+    if not silent:
+        for line in GpuMonitor.fmt_summary(gpu_stats_list):
+            print(line)
+    _p()
 
     return {
         "backend":            "ollama",
@@ -744,9 +756,13 @@ def _run_ollama(model, prompt, max_tokens, runs):
 
 
 def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1,
-                   kv_type_k="f16", kv_type_v="f16"):
+                   kv_type_k="f16", kv_type_v="f16", ctx_size=0, silent=False):
     """Benchmark token generation via llama-cli."""
     import re
+
+    def _p(*a, **k):
+        if not silent:
+            print(*a, **k)
 
     llama_cli = "/home/tyrel/llama.cpp/build/bin/llama-cli"
     if not Path(llama_cli).exists():
@@ -784,10 +800,11 @@ def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1,
 
         sys.exit("\n".join(lines) + "\n")
 
-    kv_str = f"K={kv_type_k} / V={kv_type_v}"
-    print(f"\n  Backend : llama.cpp  ({Path(llama_cli).parent})")
-    print(f"  Model   : {Path(model_path).name}")
-    print(f"  Context : model max (--ctx-size 0)  |  KV cache: {kv_str}  |  Generate: {max_tokens}  |  Runs: {runs}\n")
+    kv_str  = f"K={kv_type_k} / V={kv_type_v}"
+    ctx_str = "model max" if ctx_size == 0 else f"{ctx_size:,} tokens"
+    _p(f"\n  Backend : llama.cpp  ({Path(llama_cli).parent})")
+    _p(f"  Model   : {Path(model_path).name}")
+    _p(f"  Context : {ctx_str}  |  KV cache: {kv_str}  |  Generate: {max_tokens}  |  Runs: {runs}\n")
 
     prefill_tps_list, decode_tps_list, gpu_stats_list = [], [], []
     mem_before_load = GpuMonitor._gpu_mem_mib() or 0.0
@@ -798,7 +815,7 @@ def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1,
             "-m",  model_path,
             "-p",  prompt,
             "-n",  str(max_tokens),
-            "-c",  "0",
+            "-c",  str(ctx_size),
             "-ctk", kv_type_k,
             "-ctv", kv_type_v,
             "--n-gpu-layers", str(n_gpu_layers),
@@ -846,34 +863,35 @@ def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1,
             parts.append(warn("no stats parsed"))
             # Show last line of stderr to hint at what went wrong
             err_hint = (result.stderr or result.stdout or "").strip().splitlines()
-            if err_hint:
+            if err_hint and not silent:
                 print("  " + "  |  ".join(parts))
                 print(f"    stderr: {err_hint[-1][:120]}")
                 continue
         if gpu:
             parts.append(GpuMonitor.fmt_inline(gpu))
             gpu_stats_list.append(gpu)
-        print("  " + "  |  ".join(parts))
+        _p("  " + "  |  ".join(parts))
         # After run 1, report model+KV cache memory allocation
-        if run == 0:
+        if run == 0 and not silent:
             mem_after_load = GpuMonitor._gpu_mem_mib() or 0.0
             delta = (mem_after_load - mem_before_load) / 1024
             print(f"    → loaded {mem_after_load/1024:.1f} GB  (+{delta:.1f} GB model + KV cache)")
 
-    print()
+    _p()
     if prefill_tps_list:
-        print(f"  {'Median prefill':<28} {ok(f'{float(np.median(prefill_tps_list)):.0f} tok/s')}")
+        _p(f"  {'Median prefill':<28} {ok(f'{float(np.median(prefill_tps_list)):.0f} tok/s')}")
     if decode_tps_list:
-        print(f"  {'Median decode':<28} {ok(f'{float(np.median(decode_tps_list)):.1f} tok/s')}")
-    for line in GpuMonitor.fmt_summary(gpu_stats_list):
-        print(line)
-    print()
+        _p(f"  {'Median decode':<28} {ok(f'{float(np.median(decode_tps_list)):.1f} tok/s')}")
+    if not silent:
+        for line in GpuMonitor.fmt_summary(gpu_stats_list):
+            print(line)
+    _p()
 
     return {
         "backend":            "llama.cpp",
         "model":              Path(model_path).name,
         "model_path":         str(model_path),
-        "context_tokens":     "model_max",
+        "context_tokens":     ctx_size if ctx_size else "model_max",
         "kv_type_k":          kv_type_k,
         "kv_type_v":          kv_type_v,
         "max_tokens":         max_tokens,
@@ -903,9 +921,173 @@ def _save_llm_result(result: dict, versions: dict):
     print(f"  Results saved → {out_path}")
 
 
+# ── sweep ─────────────────────────────────────────────────────────────────────
+
+# ~100-word seed paragraph repeated to build prompts of arbitrary token length
+_SWEEP_SEED = (
+    "The NVIDIA DGX Spark is a personal AI supercomputer built on the Grace Blackwell "
+    "Superchip, combining a 72-core ARM Neoverse V2 CPU with a Blackwell GPU in a single "
+    "unified memory architecture with 128 GB shared between CPU and GPU. "
+    "It delivers exceptional throughput for large language model inference, fine-tuning, "
+    "and multimodal workloads. The NVLink-C2C interconnect provides 900 GB/s of bidirectional "
+    "bandwidth between CPU and GPU, eliminating the PCIe bottleneck that limits discrete GPU systems. "
+    "This makes the DGX Spark uniquely suited for running frontier models entirely in memory "
+    "without model sharding or quantization compromises. "
+)
+
+SWEEP_KV_TYPES_DEFAULT     = "f16,q8_0,q4_0"
+SWEEP_PROMPT_TOKENS_DEFAULT = "512,4096,32768"
+SWEEP_OUTPUT_TOKENS_DEFAULT = "128,512"
+
+
+def _generate_prompt(target_tokens: int) -> str:
+    """Build a prompt of approximately target_tokens by repeating seed text."""
+    chars_needed = int(target_tokens * 3.5)
+    reps = max(1, math.ceil(chars_needed / len(_SWEEP_SEED)))
+    return (_SWEEP_SEED * reps)[:chars_needed]
+
+
+def _print_sweep_table(kv_types, prompt_tokens, output_tokens, grid):
+    """Print a formatted summary table grouping results by output token count."""
+    import itertools
+    col_w = 24
+    print()
+    print(head("  ── Sweep Summary (prefill tok/s / decode tok/s) ─────────────────────"))
+
+    for out_t in output_tokens:
+        print(f"\n  Output tokens: {out_t}")
+        header = f"  {'prompt ~tok':<14}" + "".join(f"{kv:>{col_w}}" for kv in kv_types)
+        print(header)
+        print("  " + "─" * (14 + col_w * len(kv_types)))
+        for pr_t in prompt_tokens:
+            row = f"  {pr_t:<14}"
+            for kv in kv_types:
+                cell = grid.get((kv, pr_t, out_t), {})
+                if cell.get("status") == "ok":
+                    pf = cell.get("prefill_tps")
+                    dc = cell.get("decode_tps")
+                    pf_s = f"{pf:.0f}" if pf else "N/A"
+                    dc_s = f"{dc:.1f}" if dc else "N/A"
+                    mem_s = f" {cell['peak_mem_gb']:.1f}GB" if cell.get("peak_mem_gb") else ""
+                    val = f"{pf_s}/{dc_s}{mem_s}"
+                    row += f"{val:>{col_w}}"
+                elif cell.get("status") == "error":
+                    row += f"{'ERROR':>{col_w}}"
+                else:
+                    row += f"{'—':>{col_w}}"
+            print(row)
+    print()
+
+
+def _run_sweep(args, versions):
+    """Run LLM benchmark across KV cache types × prompt lengths × output lengths."""
+    import itertools, re, datetime
+
+    model   = args.model or DEFAULT_MODEL_OLLAMA
+    backend = args.backend
+    runs    = args.runs
+
+    def _parse(s, cast=str):
+        return [cast(x.strip()) for x in s.split(",") if x.strip()]
+
+    kv_types       = _parse(args.sweep_kv_types) if backend == "llama.cpp" else ["f16"]
+    prompt_tokens  = _parse(args.sweep_prompt_tokens, int)
+    output_tokens  = _parse(args.sweep_output_tokens, int)
+
+    # Clamp prompt lengths to model max context for ollama
+    if backend == "ollama":
+        ctx_max = _ollama_ctx_len(model)
+        if ctx_max:
+            prompt_tokens = [t for t in prompt_tokens if t < ctx_max]
+            if not prompt_tokens:
+                prompt_tokens = [min(512, ctx_max // 2)]
+
+    total = len(kv_types) * len(prompt_tokens) * len(output_tokens)
+
+    print(head(f"\n╔══ DGX Spark LLM Sweep Benchmark ═══════════════════════════════╗"))
+    print_sysinfo(versions)
+    print(head(f"╚════════════════════════════════════════════════════════════════╝"))
+    print()
+    print(f"  Backend        : {backend}")
+    print(f"  Model          : {Path(model).name if backend == 'llama.cpp' else model}")
+    if backend == "llama.cpp":
+        print(f"  KV types       : {', '.join(kv_types)}")
+    print(f"  Prompt tokens  : {', '.join(str(t) for t in prompt_tokens)}  (approx)")
+    print(f"  Output tokens  : {', '.join(str(t) for t in output_tokens)}")
+    print(f"  Runs/cell      : {runs}  |  Total cells: {total}")
+    print()
+
+    grid = {}
+    cell_num = 0
+    for kv_type, pr_t, out_t in itertools.product(kv_types, prompt_tokens, output_tokens):
+        cell_num += 1
+        prompt_text = _generate_prompt(pr_t)
+        # Set context to prompt + output + small buffer so KV size scales with prompt
+        ctx = pr_t + out_t + 64
+
+        kv_label = f"KV={kv_type}  " if backend == "llama.cpp" else ""
+        print(f"  [{cell_num}/{total}]  {kv_label}prompt≈{pr_t}  output={out_t}  ctx={ctx}",
+              end="  …  ", flush=True)
+
+        try:
+            if backend == "ollama":
+                r = _run_ollama(model, prompt_text, out_t, runs,
+                                ctx_size=ctx, silent=True)
+            else:
+                r = _run_llama_cpp(model, prompt_text, out_t, runs,
+                                   kv_type_k=kv_type, kv_type_v=kv_type,
+                                   ctx_size=ctx, silent=True)
+
+            pf  = r.get("median_prefill_tps")
+            dc  = r.get("median_decode_tps")
+            mem = None
+            if r.get("gpu_stats"):
+                peaks = [s.get("peak_mem_gb") for s in r["gpu_stats"] if s and s.get("peak_mem_gb")]
+                mem = max(peaks) if peaks else None
+
+            pf_s  = f"{pf:.0f}" if pf else "N/A"
+            dc_s  = f"{dc:.1f}" if dc else "N/A"
+            mem_s = f"  mem={mem:.1f}GB" if mem else ""
+            print(ok(f"prefill {pf_s}  decode {dc_s}") + mem_s)
+
+            grid[(kv_type, pr_t, out_t)] = {
+                "status": "ok", "prefill_tps": pf, "decode_tps": dc, "peak_mem_gb": mem,
+            }
+        except Exception as e:
+            print(fail(f"ERROR: {e}"))
+            grid[(kv_type, pr_t, out_t)] = {"status": "error", "error": str(e)}
+
+    _print_sweep_table(kv_types, prompt_tokens, output_tokens, grid)
+
+    # Save
+    ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    model_tag = re.sub(r"[^a-zA-Z0-9._-]", "_",
+                       Path(model).name if backend == "llama.cpp" else model)
+    results_dir = Path(__file__).parent / "llm-results"
+    results_dir.mkdir(exist_ok=True)
+    out_path = results_dir / f"{model_tag}__{backend.replace('.', '')}_sweep__{ts}.json"
+    payload = {
+        "timestamp": ts, "type": "sweep", "versions": versions,
+        "backend": backend,
+        "model": Path(model).name if backend == "llama.cpp" else model,
+        "kv_types": kv_types,
+        "prompt_tokens": prompt_tokens,
+        "output_tokens": output_tokens,
+        "runs_per_cell": runs,
+        "cells": {f"kv={k}|prompt={p}|output={o}": v for (k, p, o), v in grid.items()},
+    }
+    out_path.write_text(json.dumps(payload, indent=2, default=str))
+    print(f"  Sweep results saved → {out_path}\n")
+
+
 def cmd_llm(args):
-    print(head(f"\n╔══ DGX Spark LLM Token Generation Benchmark ════════════════════╗"))
     versions = collect_versions()
+
+    if args.sweep:
+        _run_sweep(args, versions)
+        return
+
+    print(head(f"\n╔══ DGX Spark LLM Token Generation Benchmark ════════════════════╗"))
     print_sysinfo(versions)
     print(head(f"╚════════════════════════════════════════════════════════════════╝"))
 
@@ -1031,6 +1213,14 @@ def main():
                     help=f"KV cache type for K (llama.cpp only, default: f16). Options: {', '.join(KV_TYPES)}")
     lm.add_argument("--kv-type-v", default="f16", choices=KV_TYPES, metavar="TYPE",
                     help=f"KV cache type for V (llama.cpp only, default: f16). Options: {', '.join(KV_TYPES)}")
+    lm.add_argument("--sweep", action="store_true",
+                    help="Sweep KV cache types × prompt lengths × output lengths")
+    lm.add_argument("--sweep-kv-types", default=SWEEP_KV_TYPES_DEFAULT, metavar="TYPES",
+                    help=f"Comma-separated KV types for sweep (llama.cpp only, default: {SWEEP_KV_TYPES_DEFAULT})")
+    lm.add_argument("--sweep-prompt-tokens", default=SWEEP_PROMPT_TOKENS_DEFAULT, metavar="TOKENS",
+                    help=f"Comma-separated approx prompt lengths (default: {SWEEP_PROMPT_TOKENS_DEFAULT})")
+    lm.add_argument("--sweep-output-tokens", default=SWEEP_OUTPUT_TOKENS_DEFAULT, metavar="TOKENS",
+                    help=f"Comma-separated output lengths (default: {SWEEP_OUTPUT_TOKENS_DEFAULT})")
 
     args = p.parse_args()
     {"baseline": cmd_baseline, "measure": cmd_measure, "show": cmd_show,
