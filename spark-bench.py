@@ -729,6 +729,19 @@ def _run_ollama(model, prompt, max_tokens, runs):
         print(line)
     print()
 
+    return {
+        "backend":            "ollama",
+        "model":              model,
+        "context_tokens":     ctx_len,
+        "max_tokens":         max_tokens,
+        "runs":               runs,
+        "median_prefill_tps": float(np.median(prefill_tps_list)) if prefill_tps_list else None,
+        "median_decode_tps":  float(np.median(decode_tps_list))  if decode_tps_list  else None,
+        "per_run": [{"prefill_tps": p, "decode_tps": d}
+                    for p, d in zip(prefill_tps_list, decode_tps_list)],
+        "gpu_stats": gpu_stats_list or None,
+    }
+
 
 def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1,
                    kv_type_k="f16", kv_type_v="f16"):
@@ -856,21 +869,58 @@ def _run_llama_cpp(model_path, prompt, max_tokens, runs, n_gpu_layers=-1,
         print(line)
     print()
 
+    return {
+        "backend":            "llama.cpp",
+        "model":              Path(model_path).name,
+        "model_path":         str(model_path),
+        "context_tokens":     "model_max",
+        "kv_type_k":          kv_type_k,
+        "kv_type_v":          kv_type_v,
+        "max_tokens":         max_tokens,
+        "runs":               runs,
+        "median_prefill_tps": float(np.median(prefill_tps_list)) if prefill_tps_list else None,
+        "median_decode_tps":  float(np.median(decode_tps_list))  if decode_tps_list  else None,
+        "per_run": [{"prefill_tps": p, "decode_tps": d}
+                    for p, d in zip(prefill_tps_list, decode_tps_list)],
+        "gpu_stats": gpu_stats_list or None,
+    }
+
+
+def _save_llm_result(result: dict, versions: dict):
+    """Save LLM benchmark result to llm-results/ directory as JSON."""
+    import re, datetime
+    results_dir = Path(__file__).parent / "llm-results"
+    results_dir.mkdir(exist_ok=True)
+
+    model_tag = re.sub(r"[^a-zA-Z0-9._-]", "_", result.get("model", "unknown"))
+    backend   = result.get("backend", "unknown").replace(".", "")
+    ts        = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    filename  = f"{model_tag}__{backend}__{ts}.json"
+    out_path  = results_dir / filename
+
+    payload = {"timestamp": ts, "versions": versions, **result}
+    out_path.write_text(json.dumps(payload, indent=2, default=str))
+    print(f"  Results saved → {out_path}")
+
 
 def cmd_llm(args):
     print(head(f"\n╔══ DGX Spark LLM Token Generation Benchmark ════════════════════╗"))
-    print_sysinfo()
+    versions = collect_versions()
+    print_sysinfo(versions)
     print(head(f"╚════════════════════════════════════════════════════════════════╝"))
 
     if args.backend == "ollama":
         if args.kv_type_k != "f16" or args.kv_type_v != "f16":
             print(warn("  Note: --kv-type-k/v are ignored for the ollama backend"))
-        _run_ollama(args.model or DEFAULT_MODEL_OLLAMA, args.prompt, args.max_tokens, args.runs)
+        result = _run_ollama(args.model or DEFAULT_MODEL_OLLAMA, args.prompt, args.max_tokens, args.runs)
     else:
         if not args.model:
             sys.exit(fail("  --model <path-to-gguf> is required for llama.cpp backend"))
-        _run_llama_cpp(args.model, args.prompt, args.max_tokens, args.runs,
-                       kv_type_k=args.kv_type_k, kv_type_v=args.kv_type_v)
+        result = _run_llama_cpp(args.model, args.prompt, args.max_tokens, args.runs,
+                                kv_type_k=args.kv_type_k, kv_type_v=args.kv_type_v)
+
+    if result:
+        _save_llm_result(result, versions)
 
 
 # ── entry points ──────────────────────────────────────────────────────────────
