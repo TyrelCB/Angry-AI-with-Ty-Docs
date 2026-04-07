@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-04-04T12:16:53.815410+00:00",
+  "captured_at": "2026-04-04T15:56:32.265867+00:00",
   "versions": {
     "gpu": "NVIDIA GB10",
     "gpu_vram_gb": 128,
@@ -16,87 +16,87 @@
   "results": {
     "gpu_matmul_fp16": {
       "status": "ok",
-      "seconds": 0.01733507251739502,
-      "tflops": 63.42699903174251,
+      "seconds": 0.017634160041809083,
+      "tflops": 62.351233354418476,
       "size": 8192,
       "dtype": "torch.float16"
     },
     "gpu_matmul_bf16": {
       "status": "ok",
-      "seconds": 0.017313807487487794,
-      "tflops": 63.50490084694464,
+      "seconds": 0.01755998420715332,
+      "tflops": 62.61461370381516,
       "size": 8192,
       "dtype": "torch.bfloat16"
     },
     "gpu_matmul_fp32": {
       "status": "ok",
-      "seconds": 0.05844180870056152,
-      "tflops": 18.813785066262597,
+      "seconds": 0.057952911376953124,
+      "tflops": 18.972500287763918,
       "size": 8192,
       "dtype": "torch.float32"
     },
     "gpu_matmul_fp8": {
       "status": "ok",
-      "seconds": 0.006994464159011841,
-      "tflops": 157.1974068034021,
+      "seconds": 0.00669815993309021,
+      "tflops": 164.15129509586643,
       "size": 8192,
       "dtype": "float8_e4m3fn"
     },
     "gpu_matmul_nvfp4": {
       "status": "ok",
-      "seconds": 0.00040161600708961485,
-      "tflops": 342.21482970257324,
+      "seconds": 0.00039800000190734865,
+      "tflops": 345.32400204358476,
       "size": 4096,
       "dtype": "nvfp4 (float4_e2m1fn_x2)"
     },
     "gpu_mem_bw": {
       "status": "ok",
-      "seconds": 0.018107327461242675,
-      "gb_s": 237.19498668111254,
+      "seconds": 0.01877395248413086,
+      "gb_s": 228.7726731827209,
       "size_mb": 2048
     },
     "gpu_vector_ops": {
       "status": "ok",
-      "seconds": 0.014046512126922608,
-      "gb_s": 229.32564631656533,
+      "seconds": 0.014339184284210205,
+      "gb_s": 224.6449594449454,
       "size_elements": 268435456
     },
     "gpu_conv2d": {
       "status": "ok",
-      "seconds": 0.0006325279772281646
+      "seconds": 0.0007110880017280579
     },
     "gpu_attention": {
       "status": "ok",
-      "seconds": 0.007320608139038086,
+      "seconds": 0.0077958559989929205,
       "seq_len": 2048,
       "heads": 32,
       "head_dim": 128
     },
     "gpu_h2d_transfer": {
       "status": "ok",
-      "h2d_seconds": 0.00914030408859253,
-      "h2d_gb_s": 58.73665764249974,
-      "d2h_seconds": 0.009118063926696778,
-      "d2h_gb_s": 58.87992410626731,
+      "h2d_seconds": 0.009108688354492188,
+      "h2d_gb_s": 58.940529207504184,
+      "d2h_seconds": 0.009091440200805663,
+      "d2h_gb_s": 59.052350358353976,
       "size_mb": 512
     },
     "cpu_matmul": {
       "status": "ok",
-      "seconds": 0.47409972000241396,
-      "gflops": 289.8946100860389,
+      "seconds": 0.2776964520016918,
+      "gflops": 494.92513311319755,
       "size": 4096
     },
     "cpu_mem_bw": {
       "status": "ok",
-      "seconds": 0.04426484899886418,
-      "gb_s": 48.51442389547299,
+      "seconds": 0.03939260900369845,
+      "gb_s": 54.51488749573249,
       "size_mb": 1024
     }
   },
   "llm": {
     "status": "ok",
     "model": "qwen3.5:0.8b",
-    "prefill_tps": 1503.7156463921035,
-    "decode_tps": 172.37078183832355
+    "prefill_tps": 1893.114491646148,
+    "decode_tps": 170.95893156418833
   }
 }

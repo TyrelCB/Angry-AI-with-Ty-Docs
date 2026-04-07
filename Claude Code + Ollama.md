@@ -96,13 +96,3 @@ Mar 05 00:06:37 spark-ee93 ollama[439352]: [GIN] 2026/03/05 - 00:06:37 | 500 |  
 Mar 05 00:09:06 spark-ee93 ollama[439352]: time=2026-03-05T00:09:06.581-07:00 level=WARN source=qwen3.go:108 msg="qwen3 tool call parsing failed" error="failed to parse JSON: unexpected end of JSON input"
 ```
 
-❯ create another variation                                                                                                 
-  ⎿  API Error: 500 {"type":"error","error":{"type":"api_error","message":"failed to parse JSON: unexpected end of JSON 
-     input"},"request_id":"req_094bbdc3abddc71a6ab6b031"}                                                                  
-                                                                                                                         
-✻ Baked for 35m 0s                                 
-                                                                                                                           
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-❯                                                                                                                          
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  ⏵⏵ accept edits on (shift+tab to cycle)                                                                    33462 tokens  

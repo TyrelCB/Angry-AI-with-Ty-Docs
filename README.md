@@ -10,8 +10,13 @@ A collection of informational documents, guides, and scripts to accompany the **
 
 | File | Description |
 |------|-------------|
-| [Claude Code + LM Studio.md](Claude%20Code%20+%20LM%20Studio.md) | Guide for using Claude Code with LM Studio |
-| [Claude Code + Ollama.md](Claude%20Code%20+%20Ollama.md) | Guide for using Claude Code with Ollama |
+| [Claude Code + LM Studio.md](Claude%20Code%20+%20LM%20Studio.md) | Guide for using Claude Code with LM Studio as a local backend |
+| [Claude Code + Ollama.md](Claude%20Code%20+%20Ollama.md) | Guide for using Claude Code with Ollama as a local backend |
+| [Claude Code + llama.cpp + Gemma 4.md](Claude%20Code%20+%20llama.cpp%20+%20Gemma%204.md) | Guide for using Claude Code with llama.cpp serving Gemma 4 (MXFP4 MoE) |
+| [Claude Code + vLLM + Qwen3.5-35B-A3B.md](Claude%20Code%20+%20vLLM%20+%20Qwen3.5-35B-A3B.md) | Guide for using Claude Code with vLLM serving Qwen 3.5 35B-A3B |
+| [Wan2.2 vs LTX2.3.md](Wan2.2%20vs%20LTX2.3.md) | Comparison of Wan2.2 and LTX2.3 video generation models |
+| [Cuda_Check.ipynb](Cuda_Check.ipynb) | Jupyter notebook for verifying CUDA setup and GPU info |
+| [spark-bench.py](spark-bench.py) | DGX Spark performance benchmark utility |
 
 ---
 
