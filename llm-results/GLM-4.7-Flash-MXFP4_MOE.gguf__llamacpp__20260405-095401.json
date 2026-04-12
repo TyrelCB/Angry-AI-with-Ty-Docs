@@ -1,0 +1,102 @@
+{
+  "timestamp": "20260405-095401",
+  "versions": {
+    "gpu": "NVIDIA GB10",
+    "gpu_vram_gb": 128,
+    "gpu_sm_count": 48,
+    "gpu_cc": "12.1",
+    "cuda_sdk": "13.0.2",
+    "cublaslt": "13.1.0.3",
+    "pytorch": "2.9.0+cu130",
+    "driver": "13.0",
+    "cpus": [],
+    "ram_gb": 128,
+    "ollama": "0.20.2"
+  },
+  "backend": "llama.cpp",
+  "model": "GLM-4.7-Flash-MXFP4_MOE.gguf",
+  "model_path": "/home/tyrel/Downloads/GLM-4.7-Flash-MXFP4_MOE.gguf",
+  "context_tokens": "model_max",
+  "kv_type_k": "q4_0",
+  "kv_type_v": "q4_0",
+  "max_tokens": 200,
+  "runs": 3,
+  "median_prefill_tps": 150.1,
+  "median_decode_tps": 59.2,
+  "per_run": [
+    {
+      "prefill_tps": 149.0,
+      "decode_tps": 59.2
+    },
+    {
+      "prefill_tps": 150.1,
+      "decode_tps": 59.0
+    },
+    {
+      "prefill_tps": 161.4,
+      "decode_tps": 59.4
+    }
+  ],
+  "gpu_stats": [
+    {
+      "util_pct": {
+        "avg": 30.441860465116278,
+        "p95": 95.0,
+        "peak": 95.0
+      },
+      "clk_mhz": {
+        "avg": 2451.9302325581393,
+        "p95": 2541.0,
+        "peak": 2548.0
+      },
+      "power_w": {
+        "p95": 40.19,
+        "peak": 40.28
+      },
+      "mem_mib": {
+        "avg": 14790.906976744185,
+        "peak": 20288.0
+      }
+    },
+    {
+      "util_pct": {
+        "avg": 32.51219512195122,
+        "p95": 95.0,
+        "peak": 95.0
+      },
+      "clk_mhz": {
+        "avg": 2443.2926829268295,
+        "p95": 2528.0,
+        "peak": 2541.0
+      },
+      "power_w": {
+        "p95": 40.25,
+        "peak": 40.35
+      },
+      "mem_mib": {
+        "avg": 15545.707317073171,
+        "peak": 20288.0
+      }
+    },
+    {
+      "util_pct": {
+        "avg": 35.73170731707317,
+        "p95": 94.0,
+        "peak": 94.0
+      },
+      "clk_mhz": {
+        "avg": 2442.5365853658536,
+        "p95": 2522.0,
+        "peak": 2522.0
+      },
+      "power_w": {
+        "p95": 40.57,
+        "peak": 40.57
+      },
+      "mem_mib": {
+        "avg": 15469.121951219513,
+        "peak": 20288.0
+      }
+    }
+  ]
+}

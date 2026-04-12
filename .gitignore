@@ -1,0 +1,6 @@
+# Python cache artifacts
+__pycache__/
+*.py[cod]
+
+# Jupyter autosave artifacts
+.ipynb_checkpoints/

@@ -1,0 +1,102 @@
+{
+  "timestamp": "20260405-091854",
+  "versions": {
+    "gpu": "NVIDIA GB10",
+    "gpu_vram_gb": 128,
+    "gpu_sm_count": 48,
+    "gpu_cc": "12.1",
+    "cuda_sdk": "13.0.2",
+    "cublaslt": "13.1.0.3",
+    "pytorch": "2.9.0+cu130",
+    "driver": "13.0",
+    "cpus": [],
+    "ram_gb": 128,
+    "ollama": "0.20.2"
+  },
+  "backend": "llama.cpp",
+  "model": "Qwen3.5-4B-Q4_K_M.gguf",
+  "model_path": "/home/tyrel/Downloads/Qwen3.5-4B-Q4_K_M.gguf",
+  "context_tokens": "model_max",
+  "kv_type_k": "q4_0",
+  "kv_type_v": "q4_0",
+  "max_tokens": 200,
+  "runs": 3,
+  "median_prefill_tps": 519.7,
+  "median_decode_tps": 58.8,
+  "per_run": [
+    {
+      "prefill_tps": 477.6,
+      "decode_tps": 58.8
+    },
+    {
+      "prefill_tps": 519.7,
+      "decode_tps": 58.8
+    },
+    {
+      "prefill_tps": 524.5,
+      "decode_tps": 58.6
+    }
+  ],
+  "gpu_stats": [
+    {
+      "util_pct": {
+        "avg": 44.27272727272727,
+        "p95": 94.0,
+        "peak": 94.0
+      },
+      "clk_mhz": {
+        "avg": 2454.8636363636365,
+        "p95": 2509.0,
+        "peak": 2509.0
+      },
+      "power_w": {
+        "p95": 40.44,
+        "peak": 40.44
+      },
+      "mem_mib": {
+        "avg": 4705.454545454545,
+        "peak": 6633.0
+      }
+    },
+    {
+      "util_pct": {
+        "avg": 47.09090909090909,
+        "p95": 94.0,
+        "peak": 94.0
+      },
+      "clk_mhz": {
+        "avg": 2457.0,
+        "p95": 2502.0,
+        "peak": 2509.0
+      },
+      "power_w": {
+        "p95": 40.9775,
+        "peak": 40.98
+      },
+      "mem_mib": {
+        "avg": 4705.454545454545,
+        "peak": 6633.0
+      }
+    },
+    {
+      "util_pct": {
+        "avg": 39.68181818181818,
+        "p95": 94.0,
+        "peak": 94.0
+      },
+      "clk_mhz": {
+        "avg": 2457.8636363636365,
+        "p95": 2502.0,
+        "peak": 2502.0
+      },
+      "power_w": {
+        "p95": 40.787,
+        "peak": 40.8
+      },
+      "mem_mib": {
+        "avg": 4700.363636363636,
+        "peak": 6633.0
+      }
+    }
+  ]
+}

@@ -1,0 +1,102 @@
+{
+  "timestamp": "20260405-092244",
+  "versions": {
+    "gpu": "NVIDIA GB10",
+    "gpu_vram_gb": 128,
+    "gpu_sm_count": 48,
+    "gpu_cc": "12.1",
+    "cuda_sdk": "13.0.2",
+    "cublaslt": "13.1.0.3",
+    "pytorch": "2.9.0+cu130",
+    "driver": "13.0",
+    "cpus": [],
+    "ram_gb": 128,
+    "ollama": "0.20.2"
+  },
+  "backend": "llama.cpp",
+  "model": "qwen35-35-a3b-nvfp4.gguf",
+  "model_path": "/home/tyrel/Downloads/qwen35-35-a3b-nvfp4.gguf",
+  "context_tokens": "model_max",
+  "kv_type_k": "q4_0",
+  "kv_type_v": "q4_0",
+  "max_tokens": 200,
+  "runs": 3,
+  "median_prefill_tps": 321.6,
+  "median_decode_tps": 59.7,
+  "per_run": [
+    {
+      "prefill_tps": 302.3,
+      "decode_tps": 59.2
+    },
+    {
+      "prefill_tps": 335.1,
+      "decode_tps": 59.8
+    },
+    {
+      "prefill_tps": 321.6,
+      "decode_tps": 59.7
+    }
+  ],
+  "gpu_stats": [
+    {
+      "util_pct": {
+        "avg": 18.16417910447761,
+        "p95": 93.0,
+        "peak": 93.0
+      },
+      "clk_mhz": {
+        "avg": 2429.208955223881,
+        "p95": 2515.0,
+        "peak": 2522.0
+      },
+      "power_w": {
+        "p95": 36.16,
+        "peak": 36.4
+      },
+      "mem_mib": {
+        "avg": 8490.925373134329,
+        "peak": 22493.0
+      }
+    },
+    {
+      "util_pct": {
+        "avg": 43.354838709677416,
+        "p95": 93.0,
+        "peak": 93.0
+      },
+      "clk_mhz": {
+        "avg": 2453.2903225806454,
+        "p95": 2525.0,
+        "peak": 2528.0
+      },
+      "power_w": {
+        "p95": 36.58,
+        "peak": 38.18
+      },
+      "mem_mib": {
+        "avg": 17410.451612903227,
+        "peak": 22493.0
+      }
+    },
+    {
+      "util_pct": {
+        "avg": 43.07142857142857,
+        "p95": 93.0,
+        "peak": 93.0
+      },
+      "clk_mhz": {
+        "avg": 2460.75,
+        "p95": 2528.0,
+        "peak": 2528.0
+      },
+      "power_w": {
+        "p95": 37.25,
+        "peak": 37.48
+      },
+      "mem_mib": {
+        "avg": 16381.25,
+        "peak": 22493.0
+      }
+    }
+  ]
+}

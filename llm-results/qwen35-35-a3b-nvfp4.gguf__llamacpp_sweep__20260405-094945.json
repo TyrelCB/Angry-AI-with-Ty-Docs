@@ -1,0 +1,144 @@
+{
+  "timestamp": "20260405-094945",
+  "type": "sweep",
+  "versions": {
+    "gpu": "NVIDIA GB10",
+    "gpu_vram_gb": 128,
+    "gpu_sm_count": 48,
+    "gpu_cc": "12.1",
+    "cuda_sdk": "13.0.2",
+    "cublaslt": "13.1.0.3",
+    "pytorch": "2.9.0+cu130",
+    "driver": "13.0",
+    "cpus": [],
+    "ram_gb": 128,
+    "ollama": "0.20.2"
+  },
+  "backend": "llama.cpp",
+  "model": "qwen35-35-a3b-nvfp4.gguf",
+  "kv_types": [
+    "f16",
+    "q8_0",
+    "q4_0"
+  ],
+  "prompt_tokens": [
+    512,
+    4096,
+    32768
+  ],
+  "output_tokens": [
+    128,
+    512
+  ],
+  "runs_per_cell": 3,
+  "cells": {
+    "kv=f16|prompt=512|output=128": {
+      "status": "ok",
+      "prefill_tps": 866.6,
+      "decode_tps": 60.3,
+      "peak_mem_gb": null
+    },
+    "kv=f16|prompt=512|output=512": {
+      "status": "ok",
+      "prefill_tps": 869.0,
+      "decode_tps": 60.2,
+      "peak_mem_gb": null
+    },
+    "kv=f16|prompt=4096|output=128": {
+      "status": "ok",
+      "prefill_tps": 1613.0,
+      "decode_tps": 59.2,
+      "peak_mem_gb": null
+    },
+    "kv=f16|prompt=4096|output=512": {
+      "status": "ok",
+      "prefill_tps": 1578.6,
+      "decode_tps": 58.2,
+      "peak_mem_gb": null
+    },
+    "kv=f16|prompt=32768|output=128": {
+      "status": "ok",
+      "prefill_tps": 1635.6,
+      "decode_tps": 50.6,
+      "peak_mem_gb": null
+    },
+    "kv=f16|prompt=32768|output=512": {
+      "status": "ok",
+      "prefill_tps": 1638.4,
+      "decode_tps": 50.4,
+      "peak_mem_gb": null
+    },
+    "kv=q8_0|prompt=512|output=128": {
+      "status": "ok",
+      "prefill_tps": 1297.5,
+      "decode_tps": 58.4,
+      "peak_mem_gb": null
+    },
+    "kv=q8_0|prompt=512|output=512": {
+      "status": "ok",
+      "prefill_tps": 1260.2,
+      "decode_tps": 58.5,
+      "peak_mem_gb": null
+    },
+    "kv=q8_0|prompt=4096|output=128": {
+      "status": "ok",
+      "prefill_tps": 1695.2,
+      "decode_tps": 57.9,
+      "peak_mem_gb": null
+    },
+    "kv=q8_0|prompt=4096|output=512": {
+      "status": "ok",
+      "prefill_tps": 1696.3,
+      "decode_tps": 57.9,
+      "peak_mem_gb": null
+    },
+    "kv=q8_0|prompt=32768|output=128": {
+      "status": "ok",
+      "prefill_tps": 1641.3,
+      "decode_tps": 52.2,
+      "peak_mem_gb": null
+    },
+    "kv=q8_0|prompt=32768|output=512": {
+      "status": "ok",
+      "prefill_tps": 1636.1,
+      "decode_tps": 52.0,
+      "peak_mem_gb": null
+    },
+    "kv=q4_0|prompt=512|output=128": {
+      "status": "ok",
+      "prefill_tps": 1293.0,
+      "decode_tps": 58.2,
+      "peak_mem_gb": null
+    },
+    "kv=q4_0|prompt=512|output=512": {
+      "status": "ok",
+      "prefill_tps": 1268.4,
+      "decode_tps": 58.4,
+      "peak_mem_gb": null
+    },
+    "kv=q4_0|prompt=4096|output=128": {
+      "status": "ok",
+      "prefill_tps": 1692.1,
+      "decode_tps": 57.8,
+      "peak_mem_gb": null
+    },
+    "kv=q4_0|prompt=4096|output=512": {
+      "status": "ok",
+      "prefill_tps": 1691.7,
+      "decode_tps": 57.5,
+      "peak_mem_gb": null
+    },
+    "kv=q4_0|prompt=32768|output=128": {
+      "status": "ok",
+      "prefill_tps": 1634.4,
+      "decode_tps": 51.3,
+      "peak_mem_gb": null
+    },
+    "kv=q4_0|prompt=32768|output=512": {
+      "status": "ok",
+      "prefill_tps": 1623.1,
+      "decode_tps": 49.8,
+      "peak_mem_gb": null
+    }
+  }
+}

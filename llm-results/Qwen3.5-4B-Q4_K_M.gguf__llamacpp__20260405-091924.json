@@ -1,0 +1,102 @@
+{
+  "timestamp": "20260405-091924",
+  "versions": {
+    "gpu": "NVIDIA GB10",
+    "gpu_vram_gb": 128,
+    "gpu_sm_count": 48,
+    "gpu_cc": "12.1",
+    "cuda_sdk": "13.0.2",
+    "cublaslt": "13.1.0.3",
+    "pytorch": "2.9.0+cu130",
+    "driver": "13.0",
+    "cpus": [],
+    "ram_gb": 128,
+    "ollama": "0.20.2"
+  },
+  "backend": "llama.cpp",
+  "model": "Qwen3.5-4B-Q4_K_M.gguf",
+  "model_path": "/home/tyrel/Downloads/Qwen3.5-4B-Q4_K_M.gguf",
+  "context_tokens": "model_max",
+  "kv_type_k": "q8_0",
+  "kv_type_v": "q8_0",
+  "max_tokens": 200,
+  "runs": 3,
+  "median_prefill_tps": 488.0,
+  "median_decode_tps": 59.0,
+  "per_run": [
+    {
+      "prefill_tps": 526.0,
+      "decode_tps": 58.9
+    },
+    {
+      "prefill_tps": 447.0,
+      "decode_tps": 59.0
+    },
+    {
+      "prefill_tps": 488.0,
+      "decode_tps": 59.0
+    }
+  ],
+  "gpu_stats": [
+    {
+      "util_pct": {
+        "avg": 38.30434782608695,
+        "p95": 94.0,
+        "peak": 94.0
+      },
+      "clk_mhz": {
+        "avg": 2451.782608695652,
+        "p95": 2508.3,
+        "peak": 2509.0
+      },
+      "power_w": {
+        "p95": 40.66,
+        "peak": 40.84
+      },
+      "mem_mib": {
+        "avg": 5657.608695652174,
+        "peak": 8681.0
+      }
+    },
+    {
+      "util_pct": {
+        "avg": 46.130434782608695,
+        "p95": 94.0,
+        "peak": 94.0
+      },
+      "clk_mhz": {
+        "avg": 2451.2608695652175,
+        "p95": 2502.0,
+        "peak": 2502.0
+      },
+      "power_w": {
+        "p95": 40.618,
+        "peak": 40.64
+      },
+      "mem_mib": {
+        "avg": 5657.652173913043,
+        "peak": 8681.0
+      }
+    },
+    {
+      "util_pct": {
+        "avg": 58.391304347826086,
+        "p95": 94.0,
+        "peak": 94.0
+      },
+      "clk_mhz": {
+        "avg": 2454.3478260869565,
+        "p95": 2508.3,
+        "peak": 2509.0
+      },
+      "power_w": {
+        "p95": 40.84,
+        "peak": 40.84
+      },
+      "mem_mib": {
+        "avg": 5655.391304347826,
+        "peak": 8681.0
+      }
+    }
+  ]
+}

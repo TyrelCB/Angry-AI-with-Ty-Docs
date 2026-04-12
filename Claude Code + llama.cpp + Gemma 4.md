@@ -1,8 +1,32 @@
-# Claude Code with custom Model on llama.cpp (Gemma 4)
+# Claude Code + LLaMA.cpp + Gemma 4
 
-## llama.cpp Setup:
+
+## Step 1: Download Gemma 4 Model
+
+<!-- ![developer](Gemma4.png) -->
+<img src="Gemma4.png" width="75%" style="display: block; margin: 0 auto;">
+
+> Gemma-4-26B-A4B runs on 18GB (4-bit) or 28GB (8-bit). 
+
+#### Hugging Face Model Card:
+
+[https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF](https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF)
+
+```bash
+pip install huggingface_hub
+```
+
+```bash
+mkdir -p ~/models
+```
+
+```bash
+hf download unsloth/gemma-4-26B-A4B-it-GGUF --include "gemma-4-26B-A4B-it-MXFP4_MOE.gguf" --local-dir ~/models/gemma-4-26b-it-GGUF
+```
+
+## Step 2: Setup LLaMA.cpp:
 ![developer](llama.cpp-logo.png)
-### 1. Build llama.cpp from source (CUDA)
+### 2-A: Build llama.cpp from source (CUDA)
 
 [https://github.com/ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp)
 
@@ -21,67 +45,74 @@ Binary will be at `./build/bin/llama-server`
 echo 'export PATH="$PATH:$HOME/llama.cpp/build/bin"' >> ~/.bashrc && source ~/.bashrc
 ```
 
-### 2. Download Gemma 4 GGUF Model
 
-![developer](Gemma4.png)
 
-> Gemma-4-26B-A4B runs on 18GB (4-bit) or 28GB (8-bit). 
-
-[https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF](https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF)
-
-```bash
-pip install huggingface_hub
-```
-
-```bash
-mkdir -p ~/models
-```
-
-```bash
-hf download unsloth/gemma-4-26B-A4B-it-GGUF --include "gemma-4-26B-A4B-it-MXFP4_MOE.gguf" --local-dir ~/models/gemma-4-26b-it-GGUF
-```
-
-### 3. Launch llama-server
+### 2-B: Launch llama-server
 
 ```bash
 ~/llama.cpp/build/bin/llama-server \
   --model ~/models/gemma-4-26b-it-GGUF/gemma-4-26B-A4B-it-MXFP4_MOE.gguf \
-  --alias default_model \
   --host 0.0.0.0 \
   --port 9090 \
   --n-gpu-layers 99 \
-  --ctx-size 12581472 \
-  --threads 8 \
-  --reasoning off \
+  --ctx-size 1638400 \
   --parallel 8 \
-  --cache-type-k q4_0 \
-  --cache-type-v q4_0 \
+  --cache-type-k q8_0 \
+  --cache-type-v q8_0 \
+  --reasoning off \
   --flash-attn on
 ```
 
-Key flags:
+Useful Flags:
 - `--n-gpu-layers 99` — offload all layers to GPU (reduce if you hit VRAM limits)
 - `--ctx-size` — Total context size (gets divided by parallel)
 - `--alias` — sets the model name exposed on the API
 - `--host 0.0.0.0` - Listen on all interfaces
-- `--port 9090` - 8080 by defualt
-- `--reasoning off` - easy toggle for thinking mode (slows down agentic coding)
-- `--parallel 64` - concurency for agents and sub-agents
+- `--port 9090` - 8080 by default
+- `--reasoning off` - easy toggle for thinking mode (CoT typically slows down agentic coding)
+- `--parallel` - concurency for agents and sub-agents
 - `--cache-type-k/v` - Key/Value quantization (save vram)
-- `--flash-attn on` - Speed up inference 
+- `--flash-attn on` - Speed up inference and reduces memory [***warning: can reduce quality***]
+- `--metrics` - enables endpoint that exposes real-time performance and usage data
 
-Verify it's running: `curl http://localhost:8080/v1/models`
+Verify it's running: `curl http://192.168.6.181:9090/v1/models`
 
 ***Claude code assumes a context of 200k***
 
+> if you want to run **more than one model on llama.cpp** you need sperate instances of `llama-server` on a different ports `--port`
 
-## Claude Config:
+> llama.cpp also has a web interface `http://192.168.6.181:9090` that is useful for Chat GPT style Q&A and to see things like Prompt Processing t/s and Generation t/s
+>
+> key and valude quantization can be set asyncronusly which will probably be a go to best practice for near future tech like turboquant
 
-<img src="claude-color.png" width="25%">
+#### Reference table for setting total context
 
-`~/.claude/llamacpp.settings.json`
+| Context| bits (n) | value (2^n) | --parallel 4 | --parallel 8 |
+|:---:|:---:|:---:|:---:|:---:|
+| ~1k | 10 | 1024 | 256 | 128 |
+| ~2k | 11 | 2048 | 512 | 256 |
+| ~4k | 12 | 4096 | 1024 | 512 |
+| ~8k | 13 | 8192 | 2048 | 1024 |
+| ~16k | 14 | 16384 | 4096 | 2048 |
+| ~32k | 15 | 32768 | 8192 | 4096 |
+| ~64k | 16 | 65536 | 16384 | 8192 |
+| ~128k | 17 | 131072 | 32768 | 16384 |
+| ~256k | 18 | 262144 | 65536 | 32768 |
+| ~512k | 19 | 524288 | 131072 | 65536 |
+| 1M | 20 | 1048576 | 262144 | 131072 |
+| 2M | 21 | 2097152 | 524288 | 262144 |
 
-***Replace ANTHROPIC_BASE_URL with the IP and PORT of your llama-server***
+
+
+
+
+<img src="claude-color.png" width="50%" style="display: block; margin: 0 auto;">
+
+## Step 3: Claude Config
+
+Create file: `~/.claude/llamacpp.settings.json`
+
+**Replace `ANTHROPIC_BASE_URL` with the `IP` and `PORT` of your llama-server**
 
 ```bash
 {
@@ -91,37 +122,32 @@ Verify it's running: `curl http://localhost:8080/v1/models`
     "API_TIMEOUT_MS": "3000000",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1,
     "CLAUDE_CODE_ATTRIBUTION_HEADER": 0,
-    "ANTHROPIC_MODEL": "default_model",
-    "ANTHROPIC_SMALL_FAST_MODEL": "default_model",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "default_model",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "default_model",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "default_model"
+    "ANTHROPIC_MODEL": "llama.cpp_model",
+    "ANTHROPIC_SMALL_FAST_MODEL": "llama.cpp_model",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "llama.cpp_model",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "llama.cpp_model",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "llama.cpp_model"
   }
 }
 ```
 
-## Launch Parameters
+## Step 4: Launch 🚀
 
 `claude --settings ~/.claude/llamacpp.settings.json`
 
 
-# Observations:
+### Observations:
 
 - llama.cpp natively exposes the Anthropic `/v1/messages` endpoint — no proxy required
-- `--alias default_model` must match the `ANTHROPIC_MODEL` value in the settings JSON
+- `--alias llama.cpp_model` **DOES NOT** need to match the `ANTHROPIC_MODEL` value in the settings JSON, which is different from connecting claude code to LM Studio
 - Monitor token generation rate and prompt eval rate via llama-server logs in stdout
 
-# Issues:
+### Issues:
 
-## Tool Call Parsing
+#### Tool Call Parsing
+
+Gemma 4 may straight up refuse to do some things, that would apear on the surface to be the agentic harness.
 
 Gemma 4 may occasionally fail to produce well-formed JSON for tool calls, causing Claude Code to retry or error out. Increasing context size and using Q8 quantization can improve reliability.
 
-## VRAM Limits
 
-Reduce `--n-gpu-layers` to partially offload to CPU if you run out of VRAM. Performance will degrade significantly for CPU-offloaded layers.
-
-```bash
-# Check how many layers are loaded to GPU
-curl http://localhost:8080/v1/models | python3 -m json.tool
-```
