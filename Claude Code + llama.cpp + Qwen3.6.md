@@ -19,7 +19,9 @@ mkdir -p ~/models
 ```
 
 ```bash
-hf download unsloth/Qwen3.6-35B-A3B-GGUF --include "Qwen3.6-35B-A3B-GGUF" --local-dir ~/models/
+hf download unsloth/Qwen3.6-35B-A3B-GGUF \
+    --include "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf" \
+    --local-dir ~/models/
 ```
 
 ## Step 2: Setup LLaMA.cpp:
