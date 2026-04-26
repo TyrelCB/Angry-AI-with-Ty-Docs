@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, initial-scale=1" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Courier+New:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+      #root {
+        position: relative; width: 1080px; height: 1920px;
+        background: #000; font-family: 'Courier New', Courier, monospace;
+        color: #00ff41; overflow: hidden;
+      }
+
+      /* Scanline overlay */
+      #scanlines {
+        position: absolute; inset: 0; z-index: 99; pointer-events: none;
+        background: repeating-linear-gradient(
+          0deg,
+          rgba(0,0,0,0.15) 0px,
+          rgba(0,0,0,0.15) 1px,
+          transparent 1px,
+          transparent 3px
+        );
+      }
+
+      /* CRT flicker */
+      #crt-flicker {
+        position: absolute; inset: 0; z-index: 98; pointer-events: none;
+        animation: crt-flicker 0.08s infinite alternate;
+        opacity: 0.015; background: #00ff41;
+      }
+      @keyframes crt-flicker {
+        0% { opacity: 0.01; }
+        100% { opacity: 0.025; }
+      }
+
+      /* Matrix rain canvas */
+      #matrix-rain {
+        position: absolute; inset: 0; z-index: 0; pointer-events: none;
+        opacity: 0.12;
+      }
+
+      /* Background layers */
+      #bg { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+
+      /* Scene base */
+      .scene { position: absolute; inset: 0; width: 1080px; height: 1920px; overflow: hidden; }
+
+      /* Shared typography */
+      .section-tag {
+        font-size: 24px; font-weight: 400; letter-spacing: 4px;
+        text-transform: uppercase; color: #006618; margin-bottom: 10px;
+      }
+      .section-tag::before { content: '// '; color: #009922; }
+      .section-title {
+        font-size: 64px; font-weight: 700; letter-spacing: 3px;
+        color: #00ff41;
+        text-shadow: 0 0 15px rgba(0,255,65,0.3), 0 0 40px rgba(0,255,65,0.1);
+      }
+      .section-title::before { content: '> '; color: #00cc33; }
+      .text-dim { color: #00dd44; }
+      .text-muted { color: #00cc33; }
+
+      /* Glow */
+      .glow { text-shadow: 0 0 7px #00ff41, 0 0 20px rgba(0,255,65,0.3), 0 0 40px rgba(0,255,65,0.1); }
+      .glow-box { box-shadow: 0 0 8px rgba(0,255,65,0.15), inset 0 0 8px rgba(0,255,65,0.05); }
+
+      /* Border */
+      .border-green { border: 1px solid #0f3a0f; }
+
+      /* S1: Hook */
+      #s1 {
+        z-index: 10; background: #000;
+        display: flex; flex-direction: column; align-items: center;
+        justify-content: space-between; padding: 120px 80px 180px;
+        text-align: center;
+      }
+      .s1-tag {
+        font-size: 22px; font-weight: 400; letter-spacing: 3px;
+        text-transform: uppercase; color: #00cc33;
+      }
+      .s1-tag .cursor {
+        display: inline-block; width: 10px; height: 20px;
+        background: #00ff41; margin-left: 4px;
+        animation: blink-cursor 1s step-end infinite;
+        vertical-align: middle;
+      }
+      @keyframes blink-cursor {
+        0%, 50% { opacity: 1; }
+        51%, 100% { opacity: 0; }
+      }
+      .s1-hero {
+        font-size: 72px; font-weight: 700; line-height: 1.2;
+        letter-spacing: 3px; color: #00ff41;
+        text-shadow: 0 0 20px rgba(0,255,65,0.4), 0 0 60px rgba(0,255,65,0.15);
+      }
+      .s1-hero .white { color: #fff; text-shadow: 0 0 20px rgba(255,255,255,0.3); }
+      .s1-sub {
+        font-size: 32px; color: #00dd44; line-height: 1.6;
+      }
+      .s1-channel {
+        display: flex; align-items: center; gap: 10px;
+        font-size: 28px; font-weight: 700;
+      }
+      .s1-channel-dot {
+        width: 12px; height: 12px; border-radius: 50%;
+        background: #ff0040; box-shadow: 0 0 8px rgba(255,0,64,0.6);
+      }
+
+      /* S2: Architecture */
+      #s2 { z-index: 10; opacity: 0; background: #000; }
+      .s2-content {
+        display: flex; flex-direction: column; align-items: center;
+        justify-content: center; height: 100%; gap: 20px; padding: 0 80px;
+      }
+      .arch-panel {
+        background: rgba(0,0,0,0.85); border: 1px solid #0f3a0f;
+        box-shadow: 0 0 20px rgba(0,255,65,0.08), inset 0 0 30px rgba(0,255,65,0.02);
+        border-radius: 0; padding: 32px 60px; width: 100%; max-width: 720px;
+      }
+      .arch-panel-title {
+        font-size: 34px; font-weight: 700; color: #00ff41;
+        text-shadow: 0 0 8px rgba(0,255,65,0.2);
+        margin-bottom: 6px;
+      }
+      .arch-panel-desc {
+        font-size: 24px; color: #00dd44;
+      }
+      .arch-arrow {
+        font-size: 36px; color: #00cc33; line-height: 1;
+      }
+
+      /* S3: Setup steps */
+      #s3 { z-index: 10; opacity: 0; background: #000; }
+      .s3-content {
+        display: flex; flex-direction: column;
+        justify-content: center; height: 100%; gap: 20px; padding: 0 80px;
+      }
+      .s3-step {
+        display: flex; align-items: center; gap: 28px;
+        background: rgba(0,0,0,0.9); border: 1px solid #0f3a0f;
+        padding: 28px 40px; width: 100%;
+      }
+      .s3-step-num {
+        font-size: 48px; font-weight: 700; color: #00cc33;
+        letter-spacing: 2px;
+      }
+      .s3-step-main {
+        font-size: 32px; font-weight: 700; color: #00ff41;
+        line-height: 1.5;
+        text-shadow: 0 0 5px rgba(0,255,65,0.15);
+      }
+      .s3-step-detail {
+        font-size: 24px; color: #00dd44;
+      }
+
+      /* S4: Verdict */
+      #s4 { z-index: 10; opacity: 0; background: #000; }
+      .s4-content {
+        display: flex; flex-direction: column;
+        justify-content: center; height: 100%; gap: 28px;
+        align-items: center; text-align: center; padding: 0 80px;
+      }
+      .verdict-card {
+        background: rgba(0,0,0,0.85); border: 1px solid #0f3a0f;
+        box-shadow: 0 0 20px rgba(0,255,65,0.08), inset 0 0 30px rgba(0,255,65,0.02);
+        padding: 44px 60px; width: 100%;
+      }
+      .verdict-title {
+        font-size: 56px; font-weight: 700; color: #00ff41;
+        letter-spacing: 4px; margin-bottom: 24px;
+        text-shadow: 0 0 15px rgba(0,255,65,0.3);
+      }
+      .verdict-list { display: flex; flex-direction: column; gap: 16px; }
+      .verdict-row {
+        display: flex; align-items: center; gap: 20px;
+        font-size: 32px; font-weight: 700; color: #00ff41;
+      }
+      .verdict-check {
+        color: #00ff41; font-size: 28px;
+        text-shadow: 0 0 6px rgba(0,255,65,0.5);
+      }
+
+      /* S5: CTA */
+      #s5 {
+        z-index: 10; opacity: 0; background: #000;
+        display: flex; flex-direction: column; align-items: center;
+        justify-content: center; text-align: center; padding: 80px;
+      }
+      .cta-handle {
+        font-size: 68px; font-weight: 700; color: #00ff41;
+        letter-spacing: 3px; margin-bottom: 36px;
+        text-shadow: 0 0 15px rgba(0,255,65,0.3), 0 0 40px rgba(0,255,65,0.15);
+      }
+      .cta-subscribe {
+        display: inline-flex; align-items: center; gap: 12px;
+        background: transparent; border: 2px solid #00ff41;
+        padding: 22px 48px; border-radius: 0;
+        font-size: 32px; font-weight: 700; color: #00ff41;
+        text-shadow: 0 0 5px rgba(0,255,65,0.5);
+        letter-spacing: 2px;
+      }
+      .cta-arrow { font-size: 56px; color: #00cc33; margin-top: 44px; }
+      .cta-link-text { font-size: 28px; color: #00dd44; margin-top: 16px; }
+
+      /* Feature card hover accent (used by S2/S3) */
+      .card-line {
+        position: absolute; top: 0; left: 0;
+        width: 2px; height: 0;
+        background: #00ff41;
+        transition: height 0.4s;
+        box-shadow: 0 0 8px #00ff41;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"
+      data-composition-id="main"
+      data-start="0" data-duration="51"
+      data-width="1080" data-height="1920"
+    >
+      <!-- Scanlines / CRT flicker -->
+      <div id="scanlines"></div>
+      <div id="crt-flicker"></div>
+
+      <!-- Matrix rain -->
+      <canvas id="matrix-rain"></canvas>
+
+      <!-- Background -->
+      <div id="bg">
+        <div id="bgp"></div>
+      </div>
+
+      <!-- Voiceover (variant A) -->
+      <audio id="vo1" src="media/vo/a_s1.wav" data-start="0.5"  data-duration="7.0" data-track-index="2" data-volume="1"></audio>
+      <audio id="vo2" src="media/vo/a_s2.wav" data-start="8.5"  data-duration="9.5" data-track-index="2" data-volume="1"></audio>
+      <audio id="vo3" src="media/vo/a_s3.wav" data-start="20.0" data-duration="10.6" data-track-index="2" data-volume="1"></audio>
+      <audio id="vo4" src="media/vo/a_s4.wav" data-start="32.0" data-duration="7.8" data-track-index="2" data-volume="1"></audio>
+      <audio id="vo5" src="media/vo/a_s5.wav" data-start="44.0" data-duration="6.2" data-track-index="2" data-volume="1"></audio>
+
+      <!-- S1: Hook -->
+      <div id="s1" class="scene">
+        <div>
+          <div id="s1-tag" class="s1-tag">root@algoflow:~$ ./init --version 3.14.2<span class="cursor"></span></div>
+        </div>
+        <div>
+          <div id="s1-hero" class="s1-hero">
+            Connect Codex CLI<br/>to <span class="white">ANY</span> Local LLM
+          </div>
+          <div id="s1-sub" class="s1-sub" style="margin-top:24px;">No OpenAI key required.</div>
+        </div>
+        <div id="s1-cta" class="s1-channel">
+          <div class="s1-channel-dot"></div>
+          <span>@Tyrel919</span>
+        </div>
+      </div>
+
+      <!-- S2: Architecture -->
+      <div id="s2" class="scene">
+        <div class="s2-content">
+          <div class="section-tag" id="s2-tag">SYSTEM ARCHITECTURE</div>
+          <div class="arch-panel" id="s2-box1">
+            <div class="arch-panel-title">Codex CLI</div>
+            <div class="arch-panel-desc">Your AI coding agent</div>
+          </div>
+          <div class="arch-arrow" id="s2-arrow">&#8595;</div>
+          <div class="arch-panel border-green glow-box" id="s2-box2">
+            <div class="arch-panel-title">Python Adapter</div>
+            <div class="arch-panel-desc">Tiny proxy &middot; 500 lines</div>
+          </div>
+          <div class="arch-arrow" id="s2-arrow2">&#8595;</div>
+          <div class="arch-panel" id="s2-box3">
+            <div class="arch-panel-title">llama.cpp Server</div>
+            <div class="arch-panel-desc">Your model, your hardware</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- S3: Setup steps -->
+      <div id="s3" class="scene">
+        <div class="s3-content">
+          <div class="section-tag" id="s3-tag">QUICK START</div>
+          <div class="s3-step" id="s3-step1">
+            <div class="s3-step-num">[01]</div>
+            <div>
+              <div class="s3-step-main">Drop the proxy script</div>
+              <div class="s3-step-detail">~/.local/bin/codex-llamacpp-proxy.py</div>
+            </div>
+          </div>
+          <div class="s3-step" id="s3-step2">
+            <div class="s3-step-num">[02]</div>
+            <div>
+              <div class="s3-step-main">Enable it with systemd</div>
+              <div class="s3-step-detail">systemctl --user enable --now</div>
+            </div>
+          </div>
+          <div class="s3-step" id="s3-step3">
+            <div class="s3-step-num">[03]</div>
+            <div>
+              <div class="s3-step-main">Update Codex config</div>
+              <div class="s3-step-detail">profiles.llama &rarr; llamacpp_proxy</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- S4: Verdict -->
+      <div id="s4" class="scene">
+        <div class="s4-content">
+          <div class="section-tag" id="s4-tag">SYSTEM STATUS</div>
+          <div class="verdict-card glow-box" id="s4-card">
+            <div class="verdict-title">IT WORKS.</div>
+            <div class="verdict-list" id="s4-items">
+              <div class="verdict-row"><span class="verdict-check">&gt;</span> Health check passes</div>
+              <div class="verdict-row"><span class="verdict-check">&gt;</span> Responses flow through</div>
+              <div class="verdict-row"><span class="verdict-check">&gt;</span> Full tool calling supported</div>
+              <div class="verdict-row"><span class="verdict-check">&gt;</span> All running on your own hardware</div>
+            </div>
+          </div>
+          <div class="s1-sub" style="font-size:28px;">Zero OpenAI dependency. Zero latency.</div>
+        </div>
+      </div>
+
+      <!-- S5: CTA -->
+      <div id="s5" class="scene">
+        <div class="cta-handle">@Tyrel919</div>
+        <div class="cta-subscribe">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#00ff41" stroke-width="2">
+            <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+          </svg>
+          SUBSCRIBE
+        </div>
+        <div class="cta-arrow">&#8595;</div>
+        <div class="cta-link-text">Full guide in description</div>
+      </div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+
+      // Ambient CRT flicker (subtle pulse)
+      tl.to("#crt-flicker", { opacity: 0.02, duration: 0.08, ease: "none", repeat: 1000, yoyo: true }, 0);
+
+      // S1 entrances (0–8.5s)
+      tl.from("#s1-tag", { opacity: 0, duration: 0.4, ease: "power2.out" }, 0.2);
+      tl.from("#s1-hero", { opacity: 0, y: 20, duration: 0.8, ease: "expo.out" }, 0.5);
+      tl.from("#s1-sub", { opacity: 0, duration: 0.5, ease: "sine.inOut" }, 1.3);
+      tl.from("#s1-cta", { opacity: 0, y: 20, duration: 0.5, ease: "power2.out" }, 1.9);
+
+      // T1&2 at t=8.5
+      tl.set("#s2", { zIndex: 11 }, 8.5);
+      tl.to("#s1", { opacity: 0, duration: 0.4, ease: "power2.in" }, 8.5);
+      tl.to("#s2", { opacity: 1, duration: 0.4, ease: "power2.out" }, 8.8);
+
+      // S2 entrances (8.8–20s)
+      tl.from("#s2-tag", { opacity: 0, duration: 0.3, ease: "power2.out" }, 9.0);
+      tl.from("#s2-box1", { opacity: 0, y: 30, duration: 0.5, ease: "power3.out" }, 9.4);
+      tl.from("#s2-arrow", { opacity: 0, duration: 0.3, ease: "power2.out" }, 9.9);
+      tl.from("#s2-box2", { opacity: 0, y: 30, duration: 0.5, ease: "power3.out" }, 10.2);
+      tl.from("#s2-arrow2", { opacity: 0, duration: 0.3, ease: "power2.out" }, 10.7);
+      tl.from("#s2-box3", { opacity: 0, y: 30, duration: 0.5, ease: "power3.out" }, 11.0);
+
+      // T2&3 at t=20.0
+      tl.set("#s3", { zIndex: 12 }, 20.0);
+      tl.to("#s2", { opacity: 0, duration: 0.4, ease: "power2.in" }, 20.0);
+      tl.to("#s3", { opacity: 1, duration: 0.4, ease: "power2.out" }, 20.3);
+
+      // S3 entrances (20.3–32s)
+      tl.from("#s3-tag", { opacity: 0, duration: 0.3, ease: "power2.out" }, 20.5);
+      tl.from("#s3-step1", { opacity: 0, x: -30, duration: 0.5, ease: "power3.out" }, 20.9);
+      tl.from("#s3-step2", { opacity: 0, x: -30, duration: 0.5, ease: "power3.out" }, 22.0);
+      tl.from("#s3-step3", { opacity: 0, x: -30, duration: 0.5, ease: "power3.out" }, 23.1);
+
+      // T3&4 at t=32.0
+      tl.set("#s4", { zIndex: 13 }, 32.0);
+      tl.to("#s3", { opacity: 0, duration: 0.4, ease: "power2.in" }, 32.0);
+      tl.to("#s4", { opacity: 1, duration: 0.4, ease: "power2.out" }, 32.3);
+
+      // S4 entrances (32.3–44s)
+      tl.from("#s4-tag", { opacity: 0, duration: 0.3, ease: "power2.out" }, 32.5);
+      tl.from("#s4-card", { opacity: 0, scale: 0.95, duration: 0.6, ease: "expo.out" }, 32.8);
+      tl.from("#s4-items .verdict-row", { opacity: 0, x: -20, duration: 0.35, ease: "power2.out" }, 33.4);
+
+      // T4&5 at t=44.0
+      tl.set("#s5", { zIndex: 14 }, 44.0);
+      tl.to("#s4", { opacity: 0, duration: 0.35, ease: "power2.in" }, 44.0);
+      tl.to("#s5", { opacity: 1, duration: 0.4, ease: "power2.out" }, 44.3);
+
+      // S5 entrances (44.3–51s)
+      tl.from("#s5 .cta-handle", { opacity: 0, y: -20, duration: 0.6, ease: "expo.out" }, 44.5);
+      tl.from("#s5 .cta-subscribe", { opacity: 0, scale: 0.8, duration: 0.5, ease: "back.out(1.7)" }, 45.1);
+      tl.from("#s5 .cta-arrow", { opacity: 0, y: 20, duration: 0.35, ease: "power2.out" }, 45.7);
+      tl.from("#s5 .cta-link-text", { opacity: 0, duration: 0.4, ease: "sine.inOut" }, 46.0);
+
+      // Final fade to black
+      tl.to("#s5", { opacity: 0, duration: 2.0, ease: "power2.in" }, 49.0);
+
+      window.__timelines["main"] = tl;
+    </script>
+
+    <script>
+      // Matrix rain background — seeded PRNG (mulberry32)
+      (function() {
+        var canvas = document.getElementById('matrix-rain');
+        var ctx = canvas.getContext('2d');
+        var w = 1080, h = 1920;
+        canvas.width = w;
+        canvas.height = h;
+
+        // Mulberry32 seeded PRNG
+        var seed = 0x6D6B_C5B3;
+        function seededRand() {
+          seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+          var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+          t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+          return ((t ^ t >>> 14) >>> 0) / 4294967296;
+        }
+
+        var fontSize = 14;
+        var columns = Math.floor(w / fontSize);
+        var chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEF';
+        var drops = [];
+        for (var i = 0; i < columns; i++) {
+          drops[i] = seededRand() * -100;
+        }
+
+        function draw() {
+          ctx.fillStyle = 'rgba(0,0,0,0.06)';
+          ctx.fillRect(0, 0, w, h);
+          ctx.fillStyle = '#00ff41';
+          ctx.font = fontSize + 'px monospace';
+
+          for (var i = 0; i < drops.length; i++) {
+            var ch = chars[Math.floor(seededRand() * chars.length)];
+            if (seededRand() < 0.05) {
+              ctx.fillStyle = '#fff';
+            } else {
+              ctx.fillStyle = '#00ff41';
+            }
+            ctx.fillText(ch, i * fontSize, drops[i] * fontSize);
+            if (drops[i] * fontSize > h && seededRand() > 0.975) {
+              drops[i] = 0;
+            }
+            drops[i] += 0.6 + seededRand() * 0.4;
+          }
+        }
+
+        setInterval(draw, 50);
+      })();
+    </script>
+  </body>
+</html>
