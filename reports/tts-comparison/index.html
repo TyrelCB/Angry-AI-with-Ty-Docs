@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TTS Feature Comparison: Pocket TTS vs Higgs TTS 3 4B vs Qwen TTS</title>
+<style>
+:root { --bg:#0d1117; --bg2:#161b22; --bg3:#1c2333; --border:#30363d; --text:#e6edf3; --text2:#8b949e; --accent:#58a6ff; --green:#3fb950; --red:#f85149; --yellow:#d29922; --purple:#bc8cff; }
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif; background:var(--bg); color:var(--text); line-height:1.5; padding:2rem 1rem; max-width:1280px; margin:0 auto; }
+h1 { font-size:1.8rem; border-bottom:1px solid var(--border); padding-bottom:.5rem; margin-bottom:1rem; }
+h2 { font-size:1.3rem; color:var(--accent); border-bottom:1px solid var(--border); padding-bottom:.3rem; margin:2rem 0 .8rem; }
+h3 { font-size:1.1rem; color:var(--purple); margin:1.2rem 0 .5rem; }
+table { width:100%; border-collapse:collapse; margin:.8rem 0 1.5rem; font-size:.9rem; }
+th,td { padding:.5rem .7rem; border:1px solid var(--border); text-align:left; vertical-align:top; }
+th { background:var(--bg2); color:var(--accent); font-weight:600; }
+tr:nth-child(even) { background:var(--bg2); }
+.badge { display:inline-block; padding:.15rem .45rem; border-radius:4px; font-size:.78rem; font-weight:600; }
+.badge-yes { background:#238636; color:#fff; }
+.badge-no { background:#3d444d; color:var(--text2); }
+.badge-part { background:#9e6a03; color:#fff; }
+.badge-need { background:#da3633; color:#fff; }
+.audio-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; margin:1rem 0; }
+.audio-card { background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:.8rem; }
+.audio-card h4 { color:var(--accent); font-size:.95rem; margin-bottom:.3rem; }
+.audio-card .meta { font-size:.78rem; color:var(--text2); margin-bottom:.5rem; }
+audio { width:100%; }
+.metric { display:flex; align-items:center; gap:.5rem; margin:.3rem 0; font-size:.88rem; }
+.metric .label { min-width:120px; color:var(--text2); }
+.metric .value { font-weight:600; }
+.section { margin:2rem 0; padding:1rem; background:var(--bg2); border:1px solid var(--border); border-radius:8px; }
+.source-list { list-style:none; padding:0; }
+.source-list li { padding:.2rem 0; font-size:.85rem; }
+.source-list a { color:var(--accent); text-decoration:none; }
+.source-list a:hover { text-decoration:underline; }
+.note { padding:.5rem .8rem; border-left:3px solid var(--yellow); background:rgba(210,153,34,.08); margin:.8rem 0; font-size:.88rem; }
+.categorical-table td:nth-child(1) { font-weight:600; }
+@media(max-width:768px) { .audio-grid { grid-template-columns:1fr; } th,td { padding:.3rem .4rem; font-size:.82rem; } }
+</style>
+</head>
+<body>
+<h1>TTS Feature Comparison: Pocket TTS vs Higgs TTS 3 4B vs Qwen TTS</h1>
+<p>Tested on <strong>spark-ee93</strong> (NVIDIA GB10, aarch64, 121 GiB RAM, 2.6 TiB NVMe). All services were local. Reference voice: <code>jack_h</code> (3.1s, 24 kHz mono). All audio clips share the same prompt text where applicable.</p>
+
+<h2>Quick Summary</h2>
+<div class="section">
+<table class="categorical-table">
+<tr><th>Feature</th><th>Pocket TTS 3.3.0</th><th>Higgs TTS 3 4B</th><th>Qwen TTS 12Hz</th></tr>
+<tr><td>Model size</td><td>~100M</td><td>~4B</td><td>~1.7B</td></tr>
+<tr><td>Run target</td><td>CPU-first; this service runs on CPU</td><td>CUDA GPU</td><td>CUDA GPU in this deployment</td></tr>
+<tr><td>Resident host / GPU allocation (one live snapshot)</td><td>~0.76 GiB RSS; no CUDA allocation</td><td>~1.23 GiB Docker cgroup memory; ~16.8 GiB reported GPU allocations across two workers</td><td>~2.44 GiB process RSS + ~4.35 GiB reported GPU allocation (Base clone model loaded)</td></tr>
+<tr><td>Warm gen time (short)</td><td>2.3–4.5 s</td><td>5.0–13.2 s</td><td>2.2–5.8 s</td></tr>
+<tr><td>Cold gen time (first)</td><td>2–3 s (model loads)</td><td>6–14 s (Docker ready)</td><td>~34 s (loads 3 sub-models)</td></tr>
+<tr><td>Preset voices</td><td>27 named voice prompts in installed package</td><td>One engine voice, <code>default</code>, in this deployment</td><td>9 presets + saved clones</td></tr>
+<tr><td>Voice cloning</td><td>Yes — WAV file (gated model required)</td><td>Yes — WAV file + exact transcript</td><td>Yes — registerable voice library</td></tr>
+<tr><td>Emotion control</td><td>No tags, no control</td><td>21 emotion tags (sentence-level)</td><td>Free-form <code>instruct</code> on presets</td></tr>
+<tr><td>Prosody control</td><td>No tags, no control</td><td>10 prosody tags (speed/pitch/pause)</td><td>Free-form <code>instruct</code> on presets</td></tr>
+<tr><td>Style control</td><td>No tags, no control</td><td>3 styles (singing/shouting/whispering)</td><td>Free-form <code>instruct</code> on presets</td></tr>
+<tr><td>Sound effects</td><td>No</td><td>9 SFX tags (inline: laugh, cough, etc.)</td><td>No</td></tr>
+<tr><td>Voice Design (text→voice)</td><td>No</td><td>No</td><td>Yes — <code>POST /tts/design</code></td></tr>
+<tr><td>Multilingual</td><td>English, French, German, Portuguese, Italian, Spanish, Dutch configs</td><td>100+ languages claimed upstream; local language quality not tested</td><td>10 selectable languages in the local service</td></tr>
+<tr><td>Streaming output</td><td>Chunked WAV over HTTP (~0.43 s first PCM in our probe)</td><td>Yes: chunked raw PCM or SSE (~1.36 s first PCM in our probe). Report proxy only returns full WAV.</td><td>Community streaming backend on port 8098 emits incremental PCM; original FastAPI /tts still waits for a complete WAV</td></tr>
+<tr><td>API protocol</td><td>Multipart POST /tts</td><td>OpenAI-compatible <code>/v1/audio/speech</code></td><td>JSON POST /tts</td></tr>
+<tr><td>Max text length</td><td>Auto-chunks by sentence; output coherence still needs listening review</td><td>Not established in our test; <code>max_new_tokens=1024</code> was an <em>output</em> cap, not an input-text limit</td><td>Not established in our test; local app caps some clone generation tokens based on text length</td></tr>
+<tr><td>Seed parameter in this API</td><td>No exposed seed</td><td>Yes: SGLang speech request accepts <code>seed</code>; exact WAV reproducibility not verified</td><td>Yes: local API accepts <code>seed</code>; byte-identical repeat previously verified</td></tr>
+<tr><td>Long-form (auto-chunk)</td><td>Built-in splitting; long-form continuity not tested</td><td>Separate batch route; continuity not tested</td><td>Segmenting in our local workflow; continuity not tested</td></tr>
+<tr><td>License</td><td>MIT code; model access terms and separate voice licenses</td><td>Boson research/non-commercial license with a conditional creator-use grant</td><td>Apache 2.0 for upstream repository and model cards checked</td></tr>
+<tr><td>ComfyUI integration</td><td>ComfyUI-Pocket-TTS (community)</td><td>None (SGLang-Omni)</td><td>None (custom FastAPI)</td></tr>
+</table>
+</div>
+
+<h2>Feature Detail</h2>
+
+<h3>Voice Directions, Style &amp; Emotion</h3>
+<div class="section">
+<table class="categorical-table">
+<tr><th>Approach</th><th>Pocket TTS</th><th>Higgs TTS 3</th><th>Qwen TTS</th></tr>
+<tr><td>How it works</td><td>No control mechanism. All preset voices produce uniform neutral speech.</td><td>Control tags embedded in text: <code>&lt;|emotion:X|&gt;</code>, <code>&lt;|style:X|&gt;</code>, <code>&lt;|prosody:X|&gt;</code>, <code>&lt;|sfx:X|&gt;</code> placed inline or at sentence start.</td><td>Free-form natural language instructions via <code>instruct</code> parameter on presets, or Voice Design with <code>/tts/design</code>.</td></tr>
+<tr><td>Emotion tags</td><td>—</td><td>21 emotions: elation, fear, sadness, amusement, etc.</td><td>Free-form via instruct</td></tr>
+<tr><td>Prosody tags</td><td>—</td><td>10 tags: speed_fast/slow, pitch_high/low, expressive, pause, long_pause</td><td>Free-form via instruct</td></tr>
+<tr><td>Style tags</td><td>—</td><td>3: singing, shouting, whispering</td><td>Free-form via instruct</td></tr>
+<tr><td>SFX</td><td>—</td><td>9 inline: laughter, cough, crying, screaming, burping, humming, sigh, sniff, sneeze</td><td>—</td></tr>
+<tr><td>Measured quality (our test)</td><td>Audio generated from expressive wording; no explicit control was sent</td><td>Tagged whisper, emotion, and laughter clips generated; listen for voice drift</td><td>Preset instruction and VoiceDesign generated clips; clone had no explicit style instruction</td></tr>
+</table>
+<div class="note"><strong>Test note:</strong> The Pocket and Qwen Jack-clone clips used expressive <em>wording only</em>; Higgs received documented tags. A separate Qwen preset and VoiceDesign sample exercise instruction-based control. The audio prompts differ between categories, so cross-category clips cannot be described as identical. Assess voice identity, whispering and laughter by listening; automated judge scores are not a reliable ranking.</div>
+</div>
+
+<h3>Voice Cloning</h3>
+<div class="section">
+<table class="categorical-table">
+<tr><th>Aspect</th><th>Pocket TTS</th><th>Higgs TTS 3</th><th>Qwen TTS</th></tr>
+<tr><td>Input</td><td>Upload WAV file (mutually exclusive with preset voice)</td><td>Upload WAV + exact transcript</td><td>Register WAV + transcript as named voice (persistent library)</td></tr>
+<tr><td>Gated model</td><td>Required for cloning; must accept terms on Hugging Face</td><td>Not required (model is public)</td><td>Not required (model is public)</td></tr>
+<tr><td>Clone quality</td><td colspan="3">Use the embedded Jack comparison clips for a subjective judgment. Three short prompts with one 3.1-second reference do not establish a general ranking.</td></tr>
+<tr><td>Clone latency</td><td>~0.8 s first chunk (model loads voice state)</td><td>~10 s (full generation with reference processing)</td><td>~2.5 s (cached clone-prompt)</td></tr>
+<tr><td>Reusable clones</td><td><code>export-voice</code> → safetensors for fast reload</td><td>References can be submitted with each request; engine also has voice upload API</td><td>Persistent voice library via <code>/voices</code></td></tr>
+<tr><td>Clone + emotion/SFX</td><td>No — no emotion/SFX control available</td><td>Yes — reference + tags in same prompt</td><td>Cloned voices ignore <code>instruct</code> (model limitation); use multiple clones per emotional register</td></tr>
+</table>
+<div class="note"><strong>Pocket cloning caveat:</strong> Without Hugging Face authentication, Pocket silently falls back to a public "without voice cloning" model. Built-in voices (alba, etc.) work in this mode, but WAV-based cloning raises <code>VOICE_CLONING_UNSUPPORTED</code>. The user must log in locally with <code>env -u HF_TOKEN hf auth login</code> if their shell injects <code>HF_TOKEN</code>.</div>
+</div>
+
+<h3>Presets &amp; Built-in Voices</h3>
+<div class="section">
+<table class="categorical-table">
+<tr><th>Aspect</th><th>Pocket TTS</th><th>Higgs TTS 3</th><th>Qwen TTS</th></tr>
+<tr><td>Count in this installation</td><td>27 named prompt voices</td><td>One in the engine's <code>/v1/audio/voices</code>: <code>default</code>; uploaded voices: none</td><td>9 presets</td></tr>
+<tr><td>Languages</td><td>7 bundled language families</td><td>Model card claims 100+; no local multilingual quality test</td><td>10 options in local <code>LANGUAGES</code> setting</td></tr>
+<tr><td>Notable voices</td><td>alba, anna, azelma, cosette, giovanni, lola, juergen, rafael, estelle, charles, marius, javert</td><td>default; report proxy offers a separate allowlisted Tyrel_Warm reference</td><td>Vivian, Serena, Uncle_Fu, Dylan, Eric, Ryan, Aiden, Ono_Anna, Sohee</td></tr>
+<tr><td>Language selection</td><td><code>--language</code> on CLI or server startup; 24-layer preview variants</td><td>Multilingual text to <code>input</code>; not separately evaluated here</td><td><code>language</code> field in request JSON</td></tr>
+</table>
+</div>
+
+<h3>Performance Benchmarks</h3>
+<div class="section">
+<p>All times measured on spark-ee93 (GB10). Warm requests shown; first calls include model loading.</p>
+<table>
+<tr><th>Category</th><th>Model</th><th>Request time</th><th>Audio duration</th><th>File size</th></tr>
+<tr><td rowspan="3"><strong>Emotion (elation)</strong></td><td>Pocket (jack clone)</td><td>2.659 s</td><td>4.44 s</td><td>213 KB</td></tr>
+<tr><td>Higgs (jack clone + tag)</td><td>13.239 s</td><td>5.88 s</td><td>282 KB</td></tr>
+<tr><td>Qwen (jack_h preset)</td><td>34.172 s*</td><td>3.36 s</td><td>161 KB</td></tr>
+<tr><td rowspan="3"><strong>Whisper (conspiratorial)</strong></td><td>Pocket (jack clone)</td><td>2.246 s</td><td>3.88 s</td><td>186 KB</td></tr>
+<tr><td>Higgs (jack clone + tag)</td><td>6.110 s</td><td>5.36 s</td><td>257 KB</td></tr>
+<tr><td>Qwen (jack_h preset)</td><td>2.691 s**</td><td>3.36 s</td><td>161 KB</td></tr>
+<tr><td rowspan="3"><strong>SFX (laughter)</strong></td><td>Pocket (jack clone)</td><td>2.296 s</td><td>3.88 s</td><td>186 KB</td></tr>
+<tr><td>Higgs (jack clone + tag)</td><td>4.990 s</td><td>4.36 s</td><td>209 KB</td></tr>
+<tr><td>Qwen (jack_h preset)</td><td>2.239 s**</td><td>2.88 s</td><td>138 KB</td></tr>
+</table>
+<div class="note">* Qwen first clone call: ~34 s includes lazy loading. ** Subsequent requests were warm.<br>Memory snapshot after a Qwen clone request: Pocket 796,272 KiB RSS (CPU only); Higgs Docker cgroup 1.226 GiB plus <code>nvidia-smi --query-compute-apps</code> GPU allocations of 16,173 and 1,028 MiB for its two workers; Qwen 2,560,976 KiB RSS plus 4,453 MiB reported GPU allocation. On GB10 these share one physical memory pool: <strong>do not add RSS and GPU figures as if they were separate banks</strong>. Docker stats alone omits Higgs's GPU allocation. These are live snapshots, not peak or idle-to-loaded deltas.</div>
+</div>
+
+<h3>Streaming &amp; Real-Time</h3>
+<div class="section">
+<table class="categorical-table">
+<tr><th>Aspect</th><th>Pocket TTS</th><th>Higgs TTS 3</th><th>Qwen TTS</th></tr>
+<tr><td>Actual streaming in running API</td><td><span class="badge badge-yes">YES</span> <code>/tts</code> chunked WAV; first PCM ~0.43 s in a long-text probe</td><td><span class="badge badge-yes">YES</span> Direct <code>/v1/audio/speech</code> with <code>stream:true</code>, <code>response_format:"pcm"</code>; first raw PCM ~1.36 s in a separate probe</td><td><span class="badge badge-yes">YES</span> <code>:8098/tts/stream</code> emits PCM chunks during generation via faster-qwen3-tts; original <code>/tts</code> still buffers WAV</td></tr>
+<tr><td>Stream transports</td><td>HTTP chunked WAV</td><td>HTTP chunked PCM16 or SSE <code>speech.audio.delta</code> (base64 PCM); Higgs report proxy is non-streaming</td><td>HTTP chunked mono PCM16 at 24 kHz on :8098; original FastAPI returns complete WAV</td></tr>
+<tr><td>Probe context</td><td>~0.43 s to first PCM; ~4.63 s total for a 160-character test</td><td>~1.36 s to first PCM; ~5.66 s total for a shorter Jack-cloned test</td><td>Warm streaming Jack clone: 0.50 s first chunk, 2.00 s total; cold loading/graph capture: ~26.7 s first chunk. Different prompts; not a controlled comparison.</td></tr>
+<tr><td>Use case fit</td><td>Low-latency streamed playback</td><td>Expressive streamed dialogue or batch production (direct engine)</td><td>Streamed playback with the separate backend; original WAV endpoint remains suitable for batch production</td></tr>
+</table>
+</div>
+
+<h3>Long-Form &amp; Unlimited Text</h3>
+<div class="section">
+<table class="categorical-table">
+<tr><th>Aspect</th><th>Pocket TTS</th><th>Higgs TTS 3</th><th>Qwen TTS</th></tr>
+<tr><td>Long-form handling</td><td>Built-in sentence/token chunking; no fixed whole-input cap stated by upstream</td><td>Batch endpoint exists, but end-to-end book-length coherence was not tested</td><td>Local app returns a completed WAV per request; segmented narration is the tested workflow</td></tr>
+<tr><td>Limit actually measured</td><td>Default <code>max_tokens=50</code> per chunk, not per entire document</td><td><code>max_new_tokens=1024</code> was the requested output-token cap; not an input limit</td><td>No maximum input-text length was benchmarked here</td></tr>
+</table>
+</div>
+
+<h3>Audio Samples</h3>
+<p>Click each audio to play. All samples use the <strong>same text prompt</strong> where applicable, with the jack_h voice as reference for cloning.</p>
+
+<h4>Emotion (elation)</h4>
+<p><em>"Jack, I can't believe you're here! I thought we'd lost you. Come on in, tell me everything!"</em></p>
+<div class="audio-grid">
+<div class="audio-card">
+<h4>Pocket TTS (clone)</h4>
+<div class="meta">4.44s · 213 KB · 2.66s request</div>
+<audio controls preload="none" src="audio/emotion-pocket-jack.wav"><source src="audio/emotion-pocket-jack.wav" type="audio/wav"></audio>
+</div>
+<div class="audio-card">
+<h4>Higgs TTS 3 (clone + &lt;emotion:elation&gt;)</h4>
+<div class="meta">5.88s · 282 KB · 13.24s request</div>
+<audio controls preload="none" src="audio/emotion-higgs-jack.wav"><source src="audio/emotion-higgs-jack.wav" type="audio/wav"></audio>
+</div>
+<div class="audio-card">
+<h4>Qwen TTS (jack_h preset)</h4>
+<div class="meta">3.36s · 161 KB · 34s cold</div>
+<audio controls preload="none" src="audio/emotion-qwen-jack.wav"><source src="audio/emotion-qwen-jack.wav" type="audio/wav"></audio>
+</div>
+</div>
+
+<h4>Whisper (conspiratorial)</h4>
+<p><em>"Listen closely. I found the key, but we have to keep it quiet until morning."</em></p>
+<div class="audio-grid">
+<div class="audio-card">
+<h4>Pocket TTS (clone)</h4>
+<div class="meta">3.88s · 186 KB · 2.25s request — no whisper rendered</div>
+<audio controls preload="none" src="audio/whisper-pocket-jack.wav"><source src="audio/whisper-pocket-jack.wav" type="audio/wav"></audio>
+</div>
+<div class="audio-card">
+<h4>Higgs TTS 3 (clone + &lt;style:whispering&gt;)</h4>
+<div class="meta">5.36s · 257 KB · 6.11s request — rated 9.5/10 by judge</div>
+<audio controls preload="none" src="audio/whisper-higgs-jack.wav"><source src="audio/whisper-higgs-jack.wav" type="audio/wav"></audio>
+</div>
+<div class="audio-card">
+<h4>Qwen TTS (jack_h preset)</h4>
+<div class="meta">3.36s · 161 KB · 2.69s warm</div>
+<audio controls preload="none" src="audio/whisper-qwen-jack.wav"><source src="audio/whisper-qwen-jack.wav" type="audio/wav"></audio>
+</div>
+</div>
+
+<h4>SFX (laughter)</h4>
+<p><em>"Ha ha, you really thought that would work? That was close!"</em></p>
+<div class="audio-grid">
+<div class="audio-card">
+<h4>Pocket TTS (clone)</h4>
+<div class="meta">3.88s · 186 KB · 2.30s request — no SFX rendered</div>
+<audio controls preload="none" src="audio/sfx-pocket-jack.wav"><source src="audio/sfx-pocket-jack.wav" type="audio/wav"></audio>
+</div>
+<div class="audio-card">
+<h4>Higgs TTS 3 (clone + &lt;emotion:amusement&gt; + &lt;sfx:laughter&gt;)</h4>
+<div class="meta">4.36s · 209 KB · 4.99s request — laughter tag rendered</div>
+<audio controls preload="none" src="audio/sfx-higgs-jack.wav"><source src="audio/sfx-higgs-jack.wav" type="audio/wav"></audio>
+</div>
+<div class="audio-card">
+<h4>Qwen TTS (jack_h preset)</h4>
+<div class="meta">2.88s · 138 KB · 2.24s warm</div>
+<audio controls preload="none" src="audio/sfx-qwen-jack.wav"><source src="audio/sfx-qwen-jack.wav" type="audio/wav"></audio>
+</div>
+</div>
+
+<h4>Qwen Extra: Voice Design &amp; Preset Instructions</h4>
+<p><em>"Listen closely. I found the key, but we have to keep it quiet until morning."</em></p>
+<div class="audio-grid">
+<div class="audio-card">
+<h4>Qwen Preset (Ryan + instruct: whisper)</h4>
+<div class="meta">7.84s · 376 KB · 33.52s — preset voice with whisper instruction</div>
+<audio controls preload="none" src="audio/qwen-preset-whisper.wav"><source src="audio/qwen-preset-whisper.wav" type="audio/wav"></audio>
+</div>
+<div class="audio-card">
+<h4>Qwen Voice Design (text→voice)</h4>
+<div class="meta">6.80s · 326 KB · 32.51s — describes voice from scratch, no reference audio</div>
+<audio controls preload="none" src="audio/qwen-voice-design.wav"><source src="audio/qwen-voice-design.wav" type="audio/wav"></audio>
+</div>
+<div class="audio-card"></div>
+</div>
+
+<h2>Decision Matrix</h2>
+<div class="section">
+<table class="categorical-table">
+<tr><th>Priority</th><th>Best pick</th><th>Why</th></tr>
+<tr><td><strong>Lowest first-audio latency in these probes</strong></td><td>Pocket TTS</td><td>~0.43 s versus Higgs ~1.36 s, on different-length prompts. Both engine endpoints stream.</td></tr>
+<tr><td><strong>Emotion, style, SFX control</strong></td><td>Higgs TTS 3</td><td>Only model with structured control: 21 emotions, 10 prosody tags, 3 styles, 9 SFX — all inline in text</td></tr>
+<tr><td><strong>Voice quality / naturalness</strong></td><td>Audition</td><td>The included Jack clips permit a subjective comparison; no blind listener study or broad quality benchmark was run.</td></tr>
+<tr><td><strong>Reusable voice library</strong></td><td>Qwen TTS</td><td>Local named clones and prompt caching; Higgs has a separate voice upload API and Pocket can export voice states.</td></tr>
+<tr><td><strong>Built-in long-form chunking</strong></td><td>Pocket TTS</td><td>Sentence/token splitting is built in, but uninterrupted book-length output was not verified.</td></tr>
+<tr><td><strong>Multilingual</strong></td><td>Not ranked</td><td>Pocket has seven config families, Qwen offers ten local language choices, Higgs advertises 100+ upstream; multilingual audio was not tested here.</td></tr>
+<tr><td><strong>Low memory footprint</strong></td><td>Pocket TTS</td><td>~796 MiB RSS on CPU; no GPU needed</td></tr>
+<tr><td><strong>Character dialogue (multi-voice)</strong></td><td>Qwen TTS</td><td>Persistent cloned voice library; many presets; seed reproducibility</td></tr>
+<tr><td><strong>Reproducible take previously verified</strong></td><td>Qwen TTS</td><td>Local seed reproduced byte-identical WAV earlier; Higgs also exposes a seed but we have not verified exact repeatability.</td></tr>
+<tr><td><strong>Licensing for creator use</strong></td><td>Read terms</td><td>Pocket code is MIT but weights have access terms and voices have their own licenses; Qwen upstream/model cards checked are Apache 2.0; Higgs has a creator-use grant with attribution and separate hosted-service restrictions.</td></tr>
+</table>
+</div>
+
+<h2>Methodology</h2>
+<p>All three services were tested on the same GB10 host (121 GiB unified RAM). The <code>jack_h</code> reference was 3.1 s at 24 kHz mono; Pocket and Higgs received that WAV, while Qwen used its named clone. Whisper small supplied diagnostic transcripts, not a definitive pronunciation score. A live post-generation snapshot collected process RSS using <code>ps</code>, Higgs cgroup memory using <code>docker stats</code>, and per-process GPU allocations using <code>nvidia-smi --query-compute-apps=pid,used_gpu_memory</code>. Whole-GPU <code>memory.used</code> returned N/A, but <em>per-process GPU memory was available</em>. On a unified-memory system these metrics are different accounting views of one pool, so their sum is not a defensible total or incremental peak. Pocket and Higgs first-audio probes used different scripts and therefore are not an apples-to-apples latency benchmark.</p>
+
+<h2>Limitations</h2>
+<ul class="source-list">
+<li><strong>Perceived voice quality is subjective.</strong> One short Jack reference and three prompt categories cannot establish a general ranking; audition the samples rather than treating model-judge scores as ground truth.</li>
+<li><strong>Qwen cold-start times are high.</strong> The first clone call (~34 s) included lazy loading of the Base model; CustomVoice presets and VoiceDesign load separate model families on first use.</li>
+<li><strong>Memory is a snapshot, not a peak.</strong> Higgs had 16,173 + 1,028 MiB of reported GPU allocations while Docker showed ~1.23 GiB cgroup memory. Qwen Base showed 4,453 MiB GPU allocation and 2,560,976 KiB RSS. These values must not be added together without checking overlap.</li>
+<li><strong>Qwen cloned voices ignore <code>instruct</code>.</strong> The Base cloning model strips style instructions, so tone comes from the reference clip plus punctuation/phrasing only.</li>
+<li><strong>Higgs tags require exact formatting.</strong> The <code>&lt;|sfx:tag|&gt;onomatopoeia</code> rule is unforgiving — a space between tag and onomatopoeia breaks rendering.</li>
+<li><strong>Pocket has no emotion/style/SFX API.</strong> The model is designed for speed and simplicity, not expressivity.</li>
+</ul>
+
+<h2>Services</h2>
+<table>
+<tr><th>Service</th><th>Port</th><th>Type</th><th>Status</th></tr>
+<tr><td>Pocket TTS</td><td>8097</td><td>systemd user service (pocket-tts.service)</td><td>active, enabled</td></tr>
+<tr><td>Higgs TTS 3</td><td>8095</td><td>systemd user service (higgs-tts-engine.service, Docker)</td><td>active, enabled</td></tr>
+<tr><td>Qwen TTS</td><td>8000</td><td>FastAPI (qwen-tts service, disabled)</td><td>inactive</td></tr>
+<tr><td>Qwen streaming</td><td>8098</td><td>systemd user service (qwen-tts-stream.service; faster-qwen3-tts)</td><td>active, enabled at update</td></tr>
+</table>
+
+<h2>Sources</h2>
+<ul class="source-list">
+<li>[1] Pocket TTS repository: <a href="https://github.com/kyutai-labs/pocket-tts">github.com/kyutai-labs/pocket-tts</a></li>
+<li>[2] Pocket TTS model card: <a href="https://huggingface.co/kyutai/pocket-tts">huggingface.co/kyutai/pocket-tts</a></li>
+<li>[3] Higgs TTS 3 4B model card and license: <a href="https://huggingface.co/bosonai/higgs-tts-3-4b">model card</a> · <a href="https://huggingface.co/bosonai/higgs-tts-3-4b/blob/main/LICENSE">license</a></li>
+<li>[4] Qwen3 TTS Base model card: <a href="https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base">huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base</a></li>
+<li>[5] Higgs TTS 3 tagging guide: <a href="https://huggingface.co/bosonai/higgs-tts-3-4b/blob/main/PROMPTING.md">model prompting guide</a> (43 tags: 21 emotion, 10 prosody, 3 style, 9 SFX)</li>
+<li>[6] Pocket TTS voice cloning reference: <a href="https://github.com/kyutai-labs/pocket-tts">project repository</a></li>
+<li>[7] SGLang-Omni Higgs streaming protocol: <a href="https://sgl-project.github.io/sglang-omni/cookbook/higgs_tts.html#streaming">streaming cookbook</a></li>
+<li>[8] Official Qwen3-TTS Python API does not yield audio incrementally despite model streaming claims: <a href="https://github.com/QwenLM/Qwen3-TTS/issues/10">upstream issue</a>; local completed-WAV wrapper was used for the original sample set.</li>
+<li>[9] Community streaming implementation: <a href="https://github.com/andimarafioti/faster-qwen3-tts">faster-qwen3-tts</a>; the separate local API used it for the follow-up streaming probes.</li>
+</ul>
+</body>
+</html>
