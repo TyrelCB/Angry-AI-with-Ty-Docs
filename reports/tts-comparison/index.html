@@ -63,6 +63,7 @@ audio { width:100%; }
 <tr><td>API protocol</td><td>Multipart POST /tts</td><td>OpenAI-compatible <code>/v1/audio/speech</code></td><td>JSON POST /tts</td></tr>
 <tr><td>Max text length</td><td>Auto-chunks by sentence; output coherence still needs listening review</td><td>Not established in our test; <code>max_new_tokens=1024</code> was an <em>output</em> cap, not an input-text limit</td><td>Not established in our test; local app caps some clone generation tokens based on text length</td></tr>
 <tr><td>Seed parameter in this API</td><td>No exposed seed</td><td>Yes: SGLang speech request accepts <code>seed</code>; exact WAV reproducibility not verified</td><td>Yes: local API accepts <code>seed</code>; byte-identical repeat previously verified</td></tr>
+<tr><td>Date/time reading (three Jack-clone probes)</td><td>Most ASR ambiguity with abbreviations and numeric timestamps</td><td>Clearer than Pocket; near Qwen in these probes</td><td>Clearer than Pocket; near Higgs in these probes</td></tr>
 <tr><td>Long-form (auto-chunk)</td><td>Built-in splitting; long-form continuity not tested</td><td>Separate batch route; continuity not tested</td><td>Segmenting in our local workflow; continuity not tested</td></tr>
 <tr><td>License</td><td>MIT code; model access terms and separate voice licenses</td><td>Boson research/non-commercial license with a conditional creator-use grant</td><td>Apache 2.0 for upstream repository and model cards checked</td></tr>
 <tr><td>ComfyUI integration</td><td>ComfyUI-Pocket-TTS (community)</td><td>None (SGLang-Omni)</td><td>None (custom FastAPI)</td></tr>
@@ -146,6 +147,37 @@ audio { width:100%; }
 <tr><td>Long-form handling</td><td>Built-in sentence/token chunking; no fixed whole-input cap stated by upstream</td><td>Batch endpoint exists, but end-to-end book-length coherence was not tested</td><td>Local app returns a completed WAV per request; segmented narration is the tested workflow</td></tr>
 <tr><td>Limit actually measured</td><td>Default <code>max_tokens=50</code> per chunk, not per entire document</td><td><code>max_new_tokens=1024</code> was the requested output-token cap; not an input limit</td><td>No maximum input-text length was benchmarked here</td></tr>
 </table>
+</div>
+
+<h3>Dates &amp; Times: Readability Probe</h3>
+<div class="section">
+<p>Three matched-text, Jack-voice samples per model. The asterisks around the date in the supplied example were Markdown emphasis and were not passed to TTS. The date and weekday combinations were checked. Listen for the weekday/month abbreviation, year, and whether the clock is intelligible and natural; a transcript alone cannot tell us precisely how a clock was spoken.</p>
+<div class="note"><strong>Provisional result:</strong> Higgs and Qwen are close on the calendar-date and clock examples; both preserve substantially more date/time detail than Pocket in Whisper small/medium diagnostics. On the dense ISO-style rollover, Higgs produced a somewhat clearer medium-ASR transcription of the numeric sequence, while both reached the final year. No blind human listening panel was run, and one take per prompt is not a general accuracy ranking. For listener-facing narration, spell out abbreviations and write times in words rather than feeding raw ISO timestamps.</div>
+
+<h4>1. Abbreviated weekday, month, 24-hour UTC (user example)</h4>
+<p><em>“Refreshed for Thu, Oct 1, 2026 (13:11 UTC) — Week 4 kicks off tonight.”</em></p>
+<div class="audio-grid">
+<div class="audio-card"><h4>Pocket · Jack clone</h4><div class="meta">6.12 s audio · Whisper medium: “Thuoc 1-226, TNWUTC” (date/time unclear)</div><audio controls preload="none" src="audio/date-update-pocket.wav"></audio></div>
+<div class="audio-card"><h4>Higgs · Jack clone</h4><div class="meta">6.76 s audio · Whisper medium: “Octa 1, 2026, 1311 UTC”</div><audio controls preload="none" src="audio/date-update-higgs.wav"></audio></div>
+<div class="audio-card"><h4>Qwen Base · jack_h</h4><div class="meta">4.96 s audio · Whisper medium: “Octet 1, 2026, 1311 UTC”</div><audio controls preload="none" src="audio/date-update-qwen.wav"></audio></div>
+</div>
+
+<h4>2. Full weekday and month, 12-hour clock</h4>
+<p><em>“The next check-in is Friday, November 13, 2026 at 9:05 a.m. Eastern.”</em></p>
+<div class="audio-grid">
+<div class="audio-card"><h4>Pocket · Jack clone</h4><div class="meta">5.08 s audio · Whisper medium recovers the date; transcribes the time as “9.5”</div><audio controls preload="none" src="audio/date-appointment-pocket.wav"></audio></div>
+<div class="audio-card"><h4>Higgs · Jack clone</h4><div class="meta">4.84 s audio · Whisper medium: “November 13, 2026 at 9.05am Eastern”</div><audio controls preload="none" src="audio/date-appointment-higgs.wav"></audio></div>
+<div class="audio-card"><h4>Qwen Base · jack_h</h4><div class="meta">4.88 s audio · Whisper medium: “November 13, 2026 at 9.05 a.m. Eastern”</div><audio controls preload="none" src="audio/date-appointment-qwen.wav"></audio></div>
+</div>
+
+<h4>3. ISO-style rollover with two times</h4>
+<p><em>“Archive window: 2026-12-31 23:59 UTC. Reopen at 00:01 on January 1, 2027.”</em></p>
+<div class="audio-grid">
+<div class="audio-card"><h4>Pocket · Jack clone</h4><div class="meta">9.48 s audio · Both ASR models struggle to recover either numeric time/date</div><audio controls preload="none" src="audio/date-rollover-pocket.wav"></audio></div>
+<div class="audio-card"><h4>Higgs · Jack clone</h4><div class="meta">7.80 s audio · Whisper medium: “20261231-2359 UTC … 001 on January 1, 2027”</div><audio controls preload="none" src="audio/date-rollover-higgs.wav"></audio></div>
+<div class="audio-card"><h4>Qwen Base · jack_h</h4><div class="meta">7.84 s audio · Whisper medium: “2026 … 12 312359 UTC … 001 on January 1st 2027”</div><audio controls preload="none" src="audio/date-rollover-qwen.wav"></audio></div>
+</div>
+<p><small>Method: same text and <code>jack_h</code> reference; Pocket and Higgs received the WAV, Qwen used its registered clone. Qwen Base used the original complete-WAV service, not the newer streaming backend; seed 424270. Higgs used temperature 0.8, top-k 50 and a 512-token cap for the final rollover take. All nine WAVs were decoded and transcribed without feeding the target text to Whisper. Automatic transcription can itself confuse number formatting, so audition the clips before deciding. These are single takes, not repeated-trial error rates.</small></p>
 </div>
 
 <h3>Audio Samples</h3>
